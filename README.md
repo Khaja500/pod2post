@@ -9,7 +9,7 @@ Podcast episode → SEO article + social pack, using a QLoRA-post-trained (SFT +
    - `kaggle auth login` (OAuth in the browser; nothing to copy), or
    - kaggle.com → Settings → API → **Generate New Token**, then save the token to `~/.kaggle/access_token` and run `chmod 600 ~/.kaggle/access_token`, or
    - the legacy `kaggle.json` at `~/.kaggle/kaggle.json` (`chmod 600`).
-3. `pip install -r requirements.txt`
+3. `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
 4. `python scripts/kaggle_run.py check`
 
 Never paste a key into chat or commit one. The secret file names are git-ignored and `check` flags any that get tracked.
@@ -59,3 +59,13 @@ runs/      state.json quota_log.csv (+ pulled outputs, git-ignored)
 docs/      DECISIONS.md
 tests/
 ```
+
+## Data (Phase 1)
+
+```
+.venv/bin/python -m src.data.download    # sources -> data/processed/episodes.jsonl, freezes the 50-episode test set
+.venv/bin/python -m src.data.chunk       # -> data/processed/chunks.jsonl (<=1,500 tokens, 150 overlap)
+python3 scripts/kaggle_run.py dataset    # upload as the private Kaggle dataset pod2post-data
+```
+
+Sources and licenses are listed in `data/SOURCES.md`. The test-set IDs are stored as hashes in `data/processed/test_ids.sha256`, and training code refuses to run on them.

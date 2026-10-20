@@ -32,7 +32,7 @@ Non-obvious choices, newest last (spec §11 rule 6).
 
 **Open: resume by attaching a kernel's own output (`push --resume`).** This works in the local simulation. Whether Kaggle accepts a kernel listing *itself* in `kernel_sources` is not yet verified. If it doesn't, the fallback is to pull the checkpoint and re-upload it as a private dataset.
 
-**Deferred: base model.** Spec §5.1 asks for the current best ungated ~3B instruct model. It is chosen before Phase 3 and confirmed with the user (rule 1).
+**Base model:** see D16.
 
 ## 2026-10-20 · Phase 0 (after first Kaggle run)
 
@@ -41,3 +41,27 @@ Non-obvious choices, newest last (spec §11 rule 6).
 **D14. `UNSLOTH_COMPILE_LOCATION=/tmp/unsloth_compiled_cache`.** By default Unsloth writes about 30 compiled-trainer files into the current directory, which is `/kaggle/working`, so they would ship with every output. `src/kaggle_env.py` sets the env var on import, and kernels import it before unsloth.
 
 **D15. Teacher option 1 (free open model on Kaggle).** The user chose it on 2026-10-20. Kernel `02_teacher_gen` therefore runs, and no API key is needed anywhere. Generation costs about 6 GPU-hours, which comes out of the 20 h budget.
+
+## 2026-10-20 · Phase 1
+
+**D16. Base model: `Qwen/Qwen3-4B-Instruct-2507`, loaded as `unsloth/Qwen3-4B-Instruct-2507-unsloth-bnb-4bit`.** Candidates were checked on the HF API on 2026-10-20:
+- **Qwen3.5-4B** (Feb 2026): rejected. It is a hybrid model, with 24 of 32 layers Gated-DeltaNet linear attention, and it is multimodal with 4.66B parameters. Linear-attention kernels on a T4 (sm_75) in fp16 are a real risk.
+- **Granite-4.2-3B** (Aug 2026): rejected for now. It is dense, 3.66B and Apache-licensed, but it is a reasoning ("thinking") model with no Unsloth build yet.
+- **SmolLM3-3B**: the fallback. It is dense, 3.08B and Apache-licensed.
+- **Qwen3-4B-Instruct-2507**: chosen. It is dense (`Qwen3ForCausalLM`), non-thinking, Apache-2.0, ungated, with 256k context and first-class Unsloth T4 support.
+
+It has 4.0B parameters, slightly above the spec's "~3B", so the headline should say "4B". The choice is cheap to revisit before Phase 4, because teacher data doesn't depend on the student. Only chunk sizes use this tokenizer, and they would shift by a few percent. The user delegated the choice by asking for full automation.
+
+**D17. Data choices.**
+- **MediaSum source:** the `ccdv/mediasum` validation zip (34 MB, 10k interviews), not the 1.4 GB training split. 2,000 interviews are plenty, and we don't evaluate on MediaSum, so its split names don't matter.
+- **Long interviews are kept on purpose** (all 225 over 6k words). Test episodes have a median of 11 chunks, while a uniform MediaSum sample would have a median of 2. Without them, Stage B would never see many-chunk notes.
+- **Test set:** 38 TalkRL + 12 Changelog. The TalkRL trailer was swapped for Changelog #662. This was re-frozen minutes after the first freeze, before anything was derived from it.
+- **Changelog source:** the CC BY-SA 4.0 originals, not the HF copies.
+- **SPoRC is skipped** for now: it is gated and there is no HF login. See SOURCES.md.
+
+**D18. Cleaning.**
+- Fillers ("um", "uh", "hmm"…), stutters ("I I"), markdown escapes and links, and stage directions ([laughs]) are removed.
+- **No re-casing.** Capitalising each Whisper segment broke mid-sentence splits.
+- **Segment merging:** consecutive same-speaker segments are merged into paragraphs that end a sentence (40+ words, capped at 200). Each paragraph keeps its first timestamp, so Stage A can cite times without a timestamp on every line.
+
+**D19. Chunker.** Chunks are at most 1,500 tokens with the base tokenizer, with about 150 tokens of overlap. They break between utterances, falling back to sentence and then word breaks for over-long utterances.

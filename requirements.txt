@@ -2,3 +2,6 @@
 kaggle==2.2.4
 pyyaml>=6.0
 pytest>=8.0
+pyarrow>=17
+tokenizers>=0.22
+huggingface_hub>=1.0

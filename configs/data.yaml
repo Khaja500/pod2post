@@ -1,0 +1,26 @@
+# Phase 1 data build (spec §4).
+#   .venv/bin/python -m src.data.download   -> data/processed/episodes.jsonl, test_ids.sha256
+#   .venv/bin/python -m src.data.chunk      -> data/processed/chunks.jsonl
+seed: 42
+tokenizer: Qwen/Qwen3-4B-Instruct-2507   # base model tokenizer, used to size chunks (docs/DECISIONS.md D16)
+
+chunk:
+  max_tokens: 1500
+  overlap_tokens: 150
+
+mediasum:                  # training transcripts (research use only)
+  repo: ccdv/mediasum
+  file: val_data.zip       # 10k interviews; the 2,000 we sample fit in it (train split is 1.4 GB)
+  strata:                  # 2,000 total. Test episodes are long (median ~11k words), so keep every
+    - {min_words: 600, max_words: 6000, n: 1775}     # long interview the file has (Stage B must
+    - {min_words: 6000, max_words: 25000, n: null}   # learn to work from many-chunk notes); null = all (225)
+
+talkrl:                    # held-out test (38 of 39 rows; the trailer is excluded)
+  repo: RamAnanth1/talkrl-podcast
+  file: data/train-00000-of-00001-99190af4fdecda9c.parquet
+  exclude_titles: ["About TalkRL Podcast: All Reinforcement Learning, All the Time"]   # 305-word trailer
+
+changelog:                 # held-out test (CC BY-SA 4.0); 38 TalkRL + 12 Changelog = 50 test episodes
+  repo: thechangelog/transcripts
+  branch: master
+  episodes: [662, 663, 664, 665, 666, 667, 668, 669, 670, 671, 672, 673]

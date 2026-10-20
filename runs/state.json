@@ -1,5 +1,17 @@
 {
-  "artifacts": {},
+  "artifacts": {
+    "dataset": {
+      "content_hash": "d53d9f005063",
+      "files": [
+        "episodes.jsonl",
+        "chunks.jsonl",
+        "test_ids.sha256"
+      ],
+      "id": "khajaaflal/pod2post-data",
+      "private": true,
+      "uploaded_at": "2026-10-20T11:54:43+00:00"
+    }
+  },
   "phases": {
     "0": {
       "name": "Setup",
@@ -8,7 +20,8 @@
     },
     "1": {
       "name": "Data",
-      "status": "todo"
+      "note": "2,000 MediaSum train + 50 frozen test (38 TalkRL, 12 Changelog); 6,215 chunks; private dataset khajaaflal/pod2post-data ready.",
+      "status": "done"
     },
     "2": {
       "name": "Transcribe",

@@ -148,3 +148,15 @@ def test_error_prints_log_tail(fake, capsys):
     fake.status[f"{USER}/pod2post-00-smoke"] = "error"
     assert kr.main(["status", "00_smoke"]) == 1
     assert "boom" in capsys.readouterr().out
+
+
+def test_dataset_status_treats_own_403_as_absent(fake, monkeypatch):
+    def cli(args, timeout=120):
+        if args[:2] == ["datasets", "status"]:
+            if args[2] == f"{USER}/pod2post-data":
+                return subprocess.CompletedProcess(args, 0, "ready\n", "")
+            return subprocess.CompletedProcess(args, 0, "403 Client Error: Forbidden for url: ...", "")
+        return fake(args, timeout)
+    monkeypatch.setattr(kr, "run_cli", cli)
+    assert kr.dataset_status(f"{USER}/pod2post-data") == "ready"
+    assert kr.dataset_status(f"{USER}/missing") == "absent"

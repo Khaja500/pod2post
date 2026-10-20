@@ -10,6 +10,7 @@
   python scripts/kaggle_run.py logs 03_sft         last 50 log lines
   python scripts/kaggle_run.py pipeline            01 -> 05 in order, stop on first error
   python scripts/kaggle_run.py quota               local quota log + Kaggle's weekly counter
+  python scripts/kaggle_run.py dataset             upload data/processed/ as the private pod2post-data dataset
 
 Every command targets the SMOKE kernel unless --full is given.
 Credentials are read only by the kaggle CLI itself (KAGGLE_API_TOKEN,
@@ -21,6 +22,7 @@ from __future__ import annotations
 import argparse
 import csv
 import functools
+import hashlib
 import json
 import os
 import re
@@ -43,6 +45,8 @@ QUOTA_LOG = RUNS / "quota_log.csv"
 QUOTA_FIELDS = ["kernel", "slug", "mode", "version", "code_hash", "pushed_at", "finished_at",
                 "wall_hours", "kernel_runtime_hours", "status"]
 PIPELINE = ["01_transcribe", "02_teacher_gen", "03_sft", "04_dpo", "05_eval"]
+DATASET_SLUG = "pod2post-data"
+DATASET_FILES = ["episodes.jsonl", "chunks.jsonl", "test_ids.sha256"]  # from data/processed/
 ACTIVE = {"queued", "running", "new_script", "cancel_requested"}
 TERMINAL = {"complete", "error", "cancel_acknowledged"}
 WEEKLY_WARN_HOURS = 20.0
@@ -146,6 +150,17 @@ def kernel_status(ref: str) -> tuple[str, str | None]:
     if "kernels.get' was denied" in text and ref.split("/", 1)[0] == username():
         return "absent", None
     die(f"`kaggle kernels status {ref}` failed:\n{text.strip()}")
+
+
+def dataset_status(ref: str) -> str:
+    """'ready' / 'pending' / ... or 'absent'. A missing dataset comes back as 403 (with exit code 0)."""
+    out = run_cli(["datasets", "status", ref], timeout=60)
+    text = (out.stdout + out.stderr).strip()
+    if "403" in text or "404" in text:
+        if ref.split("/", 1)[0] == username():
+            return "absent"
+        die(f"cannot access dataset {ref}: {text}")
+    return text.splitlines()[-1].strip().lower() if text else "unknown"
 
 
 def flatten_log(text: str) -> str:
@@ -353,6 +368,10 @@ def preflight(kernel: str, full: bool, state: dict, meta: dict, digest: str) -> 
         status, _ = kernel_status(src)
         if status != "complete":
             problems.append(f"upstream {src} is {status}, not complete")
+    for src in meta.get("dataset_sources", []):
+        status = dataset_status(src)
+        if status != "ready":
+            problems.append(f"dataset {src} is {status}, not ready")
     if full:
         smoke = state["runs"].get(nb.mode_slug(nb.template_slug(kernel), smoke=True), {})
         if smoke.get("status") != "complete" or smoke.get("code_hash") != digest:
@@ -484,6 +503,45 @@ def cmd_pipeline(args) -> int:
     return 0
 
 
+def cmd_dataset(args) -> int:
+    """Create or version the private Kaggle dataset from data/processed/ (skipped if unchanged)."""
+    src = REPO / "data" / "processed"
+    missing = [f for f in DATASET_FILES if not (src / f).is_file()]
+    if missing:
+        die(f"missing {missing} in {rel(src)}; run the Phase 1 data build first")
+    ref = f"{username()}/{DATASET_SLUG}"
+    stage = REPO / "build" / "dataset" / DATASET_SLUG
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True)
+    digest = hashlib.sha256()
+    for f in DATASET_FILES:
+        shutil.copy2(src / f, stage / f)
+        digest.update(f.encode() + (src / f).read_bytes())
+    digest = digest.hexdigest()[:12]
+    (stage / "dataset-metadata.json").write_text(json.dumps(
+        {"title": DATASET_SLUG, "id": ref, "licenses": [{"name": "other"}]}, indent=2), encoding="utf-8")
+
+    state = load_state()
+    known = state["artifacts"].get("dataset", {})
+    status = dataset_status(ref)
+    if status != "absent" and known.get("content_hash") == digest and not args.force:
+        print(f"{ref} already has this content (hash {digest}); nothing to upload.")
+        return 0
+    cmd = (["datasets", "create", "-p", str(stage), "-t", "-q"] if status == "absent"
+           else ["datasets", "version", "-p", str(stage), "-t", "-q", "-m", args.message or f"content {digest}"])
+    out = run_cli(cmd, timeout=1800)
+    text = (out.stdout + out.stderr).strip()
+    print(text)
+    if out.returncode != 0 or re.search(r"error|failed", text, re.I):
+        return 1
+    state["artifacts"]["dataset"] = {"id": ref, "content_hash": digest, "files": DATASET_FILES,
+                                     "uploaded_at": utcnow().isoformat(), "private": True}
+    save_state(state)
+    print(f"{'created' if status == 'absent' else 'versioned'} private dataset {ref} (content {digest}); "
+          "Kaggle needs a few minutes to process it (`kaggle datasets status`).")
+    return 0
+
+
 def cmd_quota(args) -> int:
     rows = read_quota_log()
     by_kernel: dict[str, float] = {}
@@ -528,6 +586,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--interval", type=parse_duration, default=60)
     p.set_defaults(fn=cmd_pipeline)
     sub.add_parser("quota", help="GPU hours used (local log + Kaggle counter)").set_defaults(fn=cmd_quota)
+    p = sub.add_parser("dataset", help="create/version the private pod2post-data dataset from data/processed/")
+    p.add_argument("-m", "--message", help="version notes")
+    p.add_argument("--force", action="store_true", help="upload even if the content is unchanged")
+    p.set_defaults(fn=cmd_dataset)
 
     args = ap.parse_args(argv)
     return args.fn(args)
