@@ -1,0 +1,37 @@
+# Phase 2: faster-whisper transcription (kernel 01_transcribe).
+model: large-v3-turbo        # faster-whisper alias -> mobiuslabsgmbh/faster-whisper-large-v3-turbo
+compute_type: float16        # T4: fp16 (no bf16)
+batch_size: 16
+beam_size: 5
+language: en
+vad_filter: true             # required by the batched pipeline to cut the audio into windows
+smoke_seconds: 120
+
+episodes:                    # Creative-Commons audio from the Internet Archive (data/SOURCES.md)
+  - id: ia-glp340
+    title: "Going Linux #340 · Security on Linux"
+    url: https://archive.org/download/glp340/glp340.mp3
+    license: CC BY 4.0
+  - id: ia-os-neoliberalism
+    title: "Open Source with Christopher Lydon: Neoliberalism (2016-04-14)"
+    url: https://archive.org/download/160414OSPODCASTNeoliberalism/160414-OS-PODCAST-Neoliberalism.mp3
+    license: CC BY-SA 3.0
+  - id: ia-librelounge-12
+    title: "Libre Lounge Episode 12: ActivityPub Part 1"
+    url: https://archive.org/download/librelounge-ep-012/librelounge-ep-012.mp3
+    license: CC BY-SA 4.0
+  - id: ia-tclp-2013-03-13
+    title: "The Command Line Podcast: Cory Doctorow on the Themes of Homeland"
+    url: https://archive.org/download/Tclp2013-03-13CoryDoctorowOnTheThemesOfHomeland/cmdln.net_2013-03-13.mp3
+    license: CC BY-SA 3.0
+  - id: ia-mintcast-305
+    title: "mintCast Episode 305"
+    url: https://archive.org/download/mintcast305/ep305.mp3
+    license: CC BY-SA 4.0
+
+wer_reference:               # not CC audio: used only to measure WER against its human transcript
+  id: changelog-661
+  title: "The Changelog #661"
+  url: https://cdn.changelog.com/uploads/podcast/661/the-changelog-661.mp3
+  transcript: https://raw.githubusercontent.com/thechangelog/transcripts/master/podcast/the-changelog-661.md
+  license: "audio © Changelog Media (private WER check only); transcript CC BY-SA 4.0"

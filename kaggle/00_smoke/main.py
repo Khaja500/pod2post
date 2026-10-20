@@ -19,7 +19,7 @@ print(f"fp16 matmul: {tflops} TFLOPS")
 
 # %%
 # Install the pinned stack and import it (unsloth first, as it patches transformers/trl).
-K.install_requirements(BUNDLE_DIR / "requirements-kaggle.txt")
+K.install_requirements(BUNDLE_DIR / "requirements-kaggle.txt", only=K.TRAIN_STACK + ["faster-whisper"])
 versions = K.import_versions(
     ["unsloth", "transformers", "trl", "peft", "accelerate", "bitsandbytes", "datasets", "faster_whisper", "torch"]
 )

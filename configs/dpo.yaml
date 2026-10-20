@@ -4,13 +4,16 @@ beta: 0.1
 learning_rate: 5.0e-6
 num_train_epochs: 1
 max_length: 4096
-max_prompt_length: 2560
+# max_prompt_length: 2560 -> removed in TRL 1.x (truncation is keep_start on the whole sequence);
+# prompts fit by construction (notes <= 1,800 tokens, docs/DECISIONS.md D23)
 per_device_train_batch_size: 1
 gradient_accumulation_steps: 8
 save_steps: 25
 seed: 42
+time_budget_s: 9600
 
 smoke:
   num_examples: 10
   max_steps: 5
   save_steps: 5
+  time_budget_s: 900

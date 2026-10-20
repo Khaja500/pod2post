@@ -1,11 +1,25 @@
-# Evaluation (spec §6). Thresholds come straight from the spec; models are filled in Phase 4.
+# Evaluation (spec §6), kernel 05_eval.
 test_set_size: 50
-systems: [base, sft, sft_dpo]   # add "teacher" as upper bound if budget allows
+systems: [base, sft, sft_dpo]   # base always; sft / sft_dpo when their adapters are attached
+base_model: Qwen/Qwen3-4B-Instruct-2507   # fp16 in vLLM; adapters were trained on its Unsloth 4-bit build
+
+generation:
+  max_model_len: 8192
+  gpu_memory_utilization: 0.88
+  temperature: 0.3              # same sampling for every system
+  top_p: 0.8
+  top_k: 20
+  notes_budget_tokens: 1800     # same as training (docs/DECISIONS.md D23)
+  max_tokens:
+    stage_a: 900
+    stage_b: 2200
 
 faithfulness:
-  nli_model: null               # e.g. a DeBERTa MNLI cross-encoder, chosen in Phase 4
+  nli_model: MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli   # MIT, ungated; label order read from config
+  top_k_windows: 3
+  threshold: 0.5
 
-seo:
+seo:                            # enforced in src/eval/seo.py
   title_max_chars: 60
   meta_max_chars: 160
   min_h2: 3

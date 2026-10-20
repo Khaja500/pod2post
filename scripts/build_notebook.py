@@ -15,6 +15,7 @@ Stdlib only, so it runs anywhere (local machine or a Claude Code cloud session).
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -37,11 +38,39 @@ def bundle_files() -> list[Path]:
     return sorted(files)
 
 
+def kernel_deps(kernel: str) -> list[Path]:
+    """src modules main.py imports (transitively) + the configs those files name."""
+    main = KAGGLE_DIR / kernel / "main.py"
+    seen: set[Path] = set()
+    stack = [main]
+    while stack:
+        for node in ast.walk(ast.parse(stack.pop().read_text(encoding="utf-8"))):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] == "src":
+                names = [node.module] + [f"{node.module}.{a.name}" for a in node.names]
+            elif isinstance(node, ast.Import):
+                names = [a.name for a in node.names if a.name.split(".")[0] == "src"]
+            else:
+                continue
+            for name in names:
+                base = REPO.joinpath(*name.split("."))
+                for cand in (base.with_suffix(".py"), base / "__init__.py"):
+                    if cand.is_file() and cand not in seen:
+                        seen.add(cand)
+                        stack.append(cand)
+    text = main.read_text(encoding="utf-8") + "".join(p.read_text(encoding="utf-8") for p in seen)
+    configs = {p for p in (REPO / "configs").glob("*.yaml") if p.name in text}
+    return sorted(seen | configs)
+
+
 def code_hash(kernel: str) -> str:
-    """Hash of everything that affects a run, independent of smoke/full mode."""
+    """Hash of everything that affects this kernel's run, independent of smoke/full mode.
+
+    Only the code the kernel actually uses counts, so editing an unrelated module
+    does not invalidate another kernel's smoke run.
+    """
     h = hashlib.sha256()
     paths = [KAGGLE_DIR / kernel / "main.py", KAGGLE_DIR / kernel / "kernel-metadata.json",
-             Path(__file__).resolve(), *bundle_files()]
+             Path(__file__).resolve(), REPO / "requirements-kaggle.txt", *kernel_deps(kernel)]
     for p in paths:
         h.update(p.relative_to(REPO).as_posix().encode())
         h.update(p.read_bytes())

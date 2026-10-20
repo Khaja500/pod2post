@@ -65,3 +65,25 @@ It has 4.0B parameters, slightly above the spec's "~3B", so the headline should 
 - **Segment merging:** consecutive same-speaker segments are merged into paragraphs that end a sentence (40+ words, capped at 200). Each paragraph keeps its first timestamp, so Stage A can cite times without a timestamp on every line.
 
 **D19. Chunker.** Chunks are at most 1,500 tokens with the base tokenizer, with about 150 tokens of overlap. They break between utterances, falling back to sentence and then word breaks for over-long utterances.
+
+## 2026-10-20 · Phase 2
+
+**D20. Teacher: `Qwen/Qwen3-14B-AWQ` on vLLM 0.32.0, tensor-parallel across both T4s, thinking disabled.**
+- It is the official 4-bit AWQ build, Apache-2.0 and ungated.
+- vLLM's docs list compute capability 7.5 (T4) as supported.
+- Gemma-4-12B was rejected: Gemma models have a history of fp16 overflow, and the T4 has no bf16.
+- vLLM pins torch 2.13.0, so it is installed only in the kernels that use it. Every kernel now installs only the packages it needs (`install_requirements(only=...)`).
+
+**D21. ASR: faster-whisper `large-v3-turbo`, fp16, batched (16), VAD on.**
+- PyAV is pinned to 18.1.0. Kaggle's PyAV 19 removed the `metadata_errors=` argument that faster-whisper 1.2.1 passes, and the first smoke run failed on it.
+- Audio: 5 CC episodes from the Internet Archive (CC BY / BY-SA), plus Changelog #661 for an objective WER check against its human transcript. #661 is not in the test set, and its audio is used privately only.
+
+**D22. Quota accounting check.** After 3 runs, `kaggle quota` showed 0.05 h against 0.032 h in the local log, so each session carries about 20 s of startup overhead the log doesn't capture. Queue time is not counted. `kaggle quota` remains authoritative.
+
+**D23. Stage B is sized to the 4,096-token training length.**
+- The constraints: training sequences are capped at 4,096 tokens, and DPO caps the prompt at 2,560 (spec §2, §5.4).
+- Merged notes now get a 1,800-token budget, inside the spec's ≤2,500.
+- The article is 700–1,000 words and the social pack is tighter.
+- Prompt plus response comes to about 3.9k tokens.
+- `build_sft` drops any example still over 4,096 and logs the count.
+- At 900–1,400 words, a Stage B example came to about 5k tokens, which would have forced either truncation or a longer max length than a T4 can train.

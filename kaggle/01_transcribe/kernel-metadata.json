@@ -8,7 +8,9 @@
   "enable_gpu": true,
   "enable_internet": true,
   "machine_shape": "NvidiaTeslaT4",
-  "dataset_sources": [],
+  "dataset_sources": [
+    "<KAGGLE_USERNAME>/pod2post-audio"
+  ],
   "kernel_sources": [],
   "competition_sources": [],
   "model_sources": []

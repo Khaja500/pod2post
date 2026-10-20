@@ -33,6 +33,8 @@ class FakeKaggle:
             self.status[meta["id"]] = "queued"
             return subprocess.CompletedProcess(
                 args, 0, f"Kernel version 3 successfully pushed.  Please check progress at https://k/{meta['id']}\n", "")
+        if args[:2] == ["datasets", "status"]:
+            return subprocess.CompletedProcess(args, 0, "ready\n", "")
         if args[:2] == ["kernels", "output"]:
             return subprocess.CompletedProcess(args, 0, "", "")
         if args[:2] == ["kernels", "logs"]:

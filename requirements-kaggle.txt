@@ -15,3 +15,11 @@ accelerate==1.15.0
 bitsandbytes==0.50.2
 datasets==4.8.5
 faster-whisper==1.2.1
+av==18.1.0                 # PyAV 19 removed open(metadata_errors=), which faster-whisper 1.2.1 passes
+# Teacher inference only (kernel 02_teacher_gen). vllm pins its own torch (2.13.0), so it is
+# never installed alongside the training stack: each kernel installs only what it needs.
+vllm==0.32.0
+# Evaluation (kernel 05_eval) and the DPO failure check: readability + NER.
+textstat==0.7.13
+spacy==3.8.16
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

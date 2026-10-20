@@ -22,6 +22,7 @@ ROOT = Path(os.environ.get("POD2POST_KAGGLE_ROOT", "/kaggle"))
 INPUT = ROOT / "input"
 WORKING = ROOT / "working"
 MANIFEST = "run_manifest.json"
+TRAIN_STACK = ["unsloth", "unsloth_zoo", "transformers", "trl", "peft", "accelerate", "bitsandbytes", "datasets"]
 CHECKPOINT_RE = re.compile(r"checkpoint-(\d+)")
 
 # Unsloth writes its compiled trainers to ./unsloth_compiled_cache (= /kaggle/working),
@@ -189,8 +190,22 @@ def fp16_matmul_tflops(n: int = 4096, iters: int = 20) -> float | None:
     return round(2 * n**3 * iters / (time.time() - t0) / 1e12, 2)
 
 
-def install_requirements(req: Path) -> None:
-    """pip install the pinned Kaggle requirements. Skipped off Kaggle."""
+def filtered_requirements(req: Path, only: list[str]) -> Path:
+    """Write the pinned lines for just the `only` packages to a temp requirements file."""
+    wanted = {re.sub(r"[-_.]+", "-", name.lower()) for name in only}
+    lines = [line for line in Path(req).read_text().splitlines()
+             if re.sub(r"[-_.]+", "-", re.split(r"[=<>@;\s]", line.strip(), 1)[0].lower()) in wanted]
+    if len(lines) != len(wanted):
+        raise ValueError(f"{sorted(wanted)} not all pinned in {req}")
+    out = Path(f"/tmp/pod2post-requirements-{'-'.join(sorted(wanted))[:60]}.txt")
+    out.write_text("\n".join(lines) + "\n")
+    return out
+
+
+def install_requirements(req: Path, only: list[str] | None = None) -> None:
+    """pip install the pinned Kaggle requirements (or just the `only` packages). Skipped off Kaggle."""
+    if only:
+        req = filtered_requirements(req, only)
     if not ON_KAGGLE:
         print(f"[kaggle_env] not on Kaggle; skipping pip install -r {req}")
         return

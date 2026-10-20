@@ -1,17 +1,34 @@
-# Teacher for distillation (spec §4.2). Decide before Phase 3.
+# Teacher for distillation (spec §4.2).
 #   option 1: open ~14B model, 4-bit, on Kaggle 2xT4 (no keys on Kaggle; kernel 02_teacher_gen runs)
 #   option 2: API model, run LOCALLY only; key read from .env (git-ignored); kernel 02_teacher_gen is skipped
 option: 1          # chosen by the user 2026-10-20: free open model on Kaggle
+seed: 42
 
-open_model:          # option 1
-  model: null
-  max_new_tokens: 2048
+open_model:          # option 1 (docs/DECISIONS.md D20)
+  model: Qwen/Qwen3-14B-AWQ        # official 4-bit AWQ, Apache-2.0, ungated; run with thinking disabled
+  tensor_parallel_size: 2          # both T4s
+  max_model_len: 8192
+  gpu_memory_utilization: 0.90
+  temperature: 0.7                 # Qwen3 non-thinking recommendation
+  top_p: 0.8
+  top_k: 20
 
-api:                 # option 2 (local only)
+api:                 # option 2 (local only, unused)
   provider: null
   model: null
   api_key_env: TEACHER_API_KEY   # name of the variable in .env, never the key itself
 
-targets:
+targets:             # after filtering (spec §4.2)
   stage_a: 600
   stage_b: 400
+overgenerate: 0.3          # generate 30% more Stage B episodes than needed, to survive filtering
+long_share: 0.25           # share of Stage B episodes with >= long_min_chunks chunks (test set median is 11)
+long_min_chunks: 5
+generic_rewrites: 100      # DPO rejected type (d); 75 needed
+notes_budget_tokens: 1800    # prompt (~2.3k) + response (~1.6k) must fit the 4,096-token training length
+batch_size: 64             # prompts per vLLM call; outputs are saved after each one
+max_tokens:
+  stage_a: 900
+  stage_b: 2200
+time_budget_s: 9600        # stop starting new batches after 2h40m (Kaggle run limit 3h)
+smoke_time_budget_s: 900

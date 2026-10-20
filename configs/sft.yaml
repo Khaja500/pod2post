@@ -1,5 +1,5 @@
 # SFT starting point (spec §5.3). base_model is chosen in a later phase and recorded in docs/DECISIONS.md.
-base_model: null
+base_model: unsloth/Qwen3-4B-Instruct-2507-unsloth-bnb-4bit   # docs/DECISIONS.md D16
 load_in_4bit: true
 dtype: float16
 max_seq_length: 4096
@@ -17,8 +17,10 @@ lr_scheduler: cosine
 save_steps: 50
 train_on_responses_only: true
 seed: 42
+time_budget_s: 9600          # save + stop after 2h40m; rerun with --resume continues
 
 smoke:
   num_examples: 10
   max_steps: 5
   save_steps: 5
+  time_budget_s: 900

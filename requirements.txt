@@ -5,3 +5,4 @@ pytest>=8.0
 pyarrow>=17
 tokenizers>=0.22
 huggingface_hub>=1.0
+jiwer>=4.0

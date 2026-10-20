@@ -1,15 +1,32 @@
 {
   "artifacts": {
-    "dataset": {
-      "content_hash": "d53d9f005063",
-      "files": [
-        "episodes.jsonl",
-        "chunks.jsonl",
-        "test_ids.sha256"
-      ],
-      "id": "khajaaflal/pod2post-data",
-      "private": true,
-      "uploaded_at": "2026-10-20T11:54:43+00:00"
+    "datasets": {
+      "audio": {
+        "content_hash": "44e66d0bbdd0",
+        "files": [
+          "audio_manifest.json",
+          "changelog-661.mp3",
+          "ia-glp340.mp3",
+          "ia-librelounge-12.mp3",
+          "ia-mintcast-305.mp3",
+          "ia-os-neoliberalism.mp3",
+          "ia-tclp-2013-03-13.mp3"
+        ],
+        "id": "khajaaflal/pod2post-audio",
+        "private": true,
+        "uploaded_at": "2026-10-20T12:16:44+00:00"
+      },
+      "data": {
+        "content_hash": "d53d9f005063",
+        "files": [
+          "episodes.jsonl",
+          "chunks.jsonl",
+          "test_ids.sha256"
+        ],
+        "id": "khajaaflal/pod2post-data",
+        "private": true,
+        "uploaded_at": "2026-10-20T11:54:43+00:00"
+      }
     }
   },
   "phases": {
@@ -66,23 +83,32 @@
       "version": 1
     },
     "pod2post-01-transcribe-smoke": {
-      "code_hash": "6186cf730c6b",
-      "finished_at": "2026-10-20T11:31:06+00:00",
+      "code_hash": "dd226fe5158d",
+      "finished_at": "2026-10-20T12:34:24+00:00",
       "kernel": "01_transcribe",
       "logged": true,
       "mode": "smoke",
-      "pulled_to": "runs/2026-10-20/01_transcribe-smoke-v1",
-      "pushed_at": "2026-10-20T11:03:55+00:00",
+      "pushed_at": "2026-10-20T12:32:50+00:00",
       "resume": false,
       "status": "complete",
-      "version": 1
+      "version": 4
     },
     "pod2post-02-teacher-gen-smoke": {
-      "code_hash": "4e64bb7051cf",
+      "code_hash": "902199fd4226",
       "kernel": "02_teacher_gen",
       "logged": false,
       "mode": "smoke",
-      "pushed_at": "2026-10-20T11:31:15+00:00",
+      "pushed_at": "2026-10-20T12:34:46+00:00",
+      "resume": false,
+      "status": "queued",
+      "version": 2
+    },
+    "pod2post-03-sft-smoke": {
+      "code_hash": "b9749146002b",
+      "kernel": "03_sft",
+      "logged": false,
+      "mode": "smoke",
+      "pushed_at": "2026-10-20T11:57:42+00:00",
       "resume": false,
       "status": "queued",
       "version": 1
