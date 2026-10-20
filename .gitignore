@@ -11,7 +11,7 @@ credentials*.json
 
 # --- Data (only SOURCES.md and the frozen test-set hashes are tracked) ------
 data/raw/
-data/processed/
+data/processed/*
 !data/processed/test_ids.sha256
 
 # --- Run artifacts (state + quota log are tracked; outputs are not) ---------
