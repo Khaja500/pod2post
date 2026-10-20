@@ -1,0 +1,78 @@
+{
+  "artifacts": {},
+  "phases": {
+    "0": {
+      "name": "Setup",
+      "note": "00_smoke v1 complete on T4 (private, NvidiaTeslaT4, pins verified). Remaining: smoke pipeline 01->05 (chaining) + resume test.",
+      "status": "in_progress"
+    },
+    "1": {
+      "name": "Data",
+      "status": "todo"
+    },
+    "2": {
+      "name": "Transcribe",
+      "status": "todo"
+    },
+    "3": {
+      "name": "Teacher gen",
+      "status": "todo"
+    },
+    "4": {
+      "name": "Baseline eval",
+      "status": "todo"
+    },
+    "5": {
+      "name": "SFT",
+      "status": "todo"
+    },
+    "6": {
+      "name": "DPO",
+      "status": "todo"
+    },
+    "7": {
+      "name": "Eval + report",
+      "status": "todo"
+    },
+    "8": {
+      "name": "Demo",
+      "status": "todo"
+    }
+  },
+  "runs": {
+    "pod2post-00-smoke": {
+      "code_hash": "4692408a161c",
+      "finished_at": "2026-10-20T10:56:08+00:00",
+      "kernel": "00_smoke",
+      "logged": true,
+      "mode": "smoke",
+      "pulled_to": "runs/2026-10-20/00_smoke-v1",
+      "pushed_at": "2026-10-20T10:53:52+00:00",
+      "resume": false,
+      "status": "complete",
+      "version": 1
+    },
+    "pod2post-01-transcribe-smoke": {
+      "code_hash": "6186cf730c6b",
+      "finished_at": "2026-10-20T11:31:06+00:00",
+      "kernel": "01_transcribe",
+      "logged": true,
+      "mode": "smoke",
+      "pulled_to": "runs/2026-10-20/01_transcribe-smoke-v1",
+      "pushed_at": "2026-10-20T11:03:55+00:00",
+      "resume": false,
+      "status": "complete",
+      "version": 1
+    },
+    "pod2post-02-teacher-gen-smoke": {
+      "code_hash": "4e64bb7051cf",
+      "kernel": "02_teacher_gen",
+      "logged": false,
+      "mode": "smoke",
+      "pushed_at": "2026-10-20T11:31:15+00:00",
+      "resume": false,
+      "status": "queued",
+      "version": 1
+    }
+  }
+}

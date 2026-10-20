@@ -1,0 +1,4 @@
+# Local machine / Claude Code cloud session. Kaggle kernels use requirements-kaggle.txt.
+kaggle==2.2.4
+pyyaml>=6.0
+pytest>=8.0

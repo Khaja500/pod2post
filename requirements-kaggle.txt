@@ -1,0 +1,17 @@
+# Pinned for Kaggle GPU kernels (installed by each kernel at start-up).
+# Chosen to satisfy unsloth 2026.10.7's own bounds (transformers<=5.17.0,
+# trl<=1.15.0, datasets<5). VERIFIED 2026-10-20 by kaggle/00_smoke v1: all
+# install and import on Kaggle (Python 3.13.15, torch 2.11.0+cu128, Tesla T4).
+#
+# torch / torchvision / CUDA are NOT pinned: we use the versions preinstalled in
+# the Kaggle image (unsloth requires torch>=2.4,<2.15). Reinstalling torch costs
+# minutes of GPU quota per run and risks a CUDA mismatch.
+unsloth==2026.10.7
+unsloth_zoo==2026.10.7
+transformers==5.17.0
+trl==1.15.0
+peft==0.21.2
+accelerate==1.15.0
+bitsandbytes==0.50.2
+datasets==4.8.5
+faster-whisper==1.2.1

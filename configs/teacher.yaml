@@ -1,0 +1,17 @@
+# Teacher for distillation (spec §4.2). Decide before Phase 3.
+#   option 1: open ~14B model, 4-bit, on Kaggle 2xT4 (no keys on Kaggle; kernel 02_teacher_gen runs)
+#   option 2: API model, run LOCALLY only; key read from .env (git-ignored); kernel 02_teacher_gen is skipped
+option: 1          # chosen by the user 2026-10-20: free open model on Kaggle
+
+open_model:          # option 1
+  model: null
+  max_new_tokens: 2048
+
+api:                 # option 2 (local only)
+  provider: null
+  model: null
+  api_key_env: TEACHER_API_KEY   # name of the variable in .env, never the key itself
+
+targets:
+  stage_a: 600
+  stage_b: 400

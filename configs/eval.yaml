@@ -1,0 +1,20 @@
+# Evaluation (spec §6). Thresholds come straight from the spec; models are filled in Phase 4.
+test_set_size: 50
+systems: [base, sft, sft_dpo]   # add "teacher" as upper bound if budget allows
+
+faithfulness:
+  nli_model: null               # e.g. a DeBERTa MNLI cross-encoder, chosen in Phase 4
+
+seo:
+  title_max_chars: 60
+  meta_max_chars: 160
+  min_h2: 3
+  keyword_density: [0.005, 0.025]
+  keyword_in_first_words: 100
+
+readability:
+  flesch_target: [50, 70]
+
+social:
+  x_post_max_chars: 280
+  pull_quotes: [3, 5]

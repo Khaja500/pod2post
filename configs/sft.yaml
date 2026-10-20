@@ -1,0 +1,24 @@
+# SFT starting point (spec §5.3). base_model is chosen in a later phase and recorded in docs/DECISIONS.md.
+base_model: null
+load_in_4bit: true
+dtype: float16
+max_seq_length: 4096
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0
+target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+learning_rate: 2.0e-4
+num_train_epochs: 2
+warmup_ratio: 0.05
+lr_scheduler: cosine
+save_steps: 50
+train_on_responses_only: true
+seed: 42
+
+smoke:
+  num_examples: 10
+  max_steps: 5
+  save_steps: 5

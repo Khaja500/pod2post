@@ -1,0 +1,38 @@
+# --- Secrets (never commit) -------------------------------------------------
+kaggle.json
+access_token
+.kaggle/
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials*.json
+
+# --- Data (only SOURCES.md and the frozen test-set hashes are tracked) ------
+data/raw/
+data/processed/
+!data/processed/test_ids.sha256
+
+# --- Run artifacts (state + quota log are tracked; outputs are not) ---------
+runs/*
+!runs/quota_log.csv
+!runs/state.json
+build/
+outputs/
+checkpoints/
+*.safetensors
+*.bin
+*.pt
+*.gguf
+*.mp3
+*.wav
+
+# --- Python / tooling -------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+.DS_Store

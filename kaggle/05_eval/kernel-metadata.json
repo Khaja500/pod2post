@@ -1,0 +1,18 @@
+{
+  "id": "<KAGGLE_USERNAME>/pod2post-05-eval",
+  "title": "pod2post-05-eval",
+  "code_file": "run.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": [],
+  "kernel_sources": [
+    "<KAGGLE_USERNAME>/pod2post-03-sft",
+    "<KAGGLE_USERNAME>/pod2post-04-dpo"
+  ],
+  "competition_sources": [],
+  "model_sources": []
+}

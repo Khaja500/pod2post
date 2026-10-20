@@ -1,0 +1,16 @@
+# DPO starting point (spec §5.4).
+start_from: sft_adapter
+beta: 0.1
+learning_rate: 5.0e-6
+num_train_epochs: 1
+max_length: 4096
+max_prompt_length: 2560
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+save_steps: 25
+seed: 42
+
+smoke:
+  num_examples: 10
+  max_steps: 5
+  save_steps: 5
