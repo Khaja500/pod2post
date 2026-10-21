@@ -30,5 +30,5 @@ batch_size: 64             # prompts per vLLM call; outputs are saved after each
 max_tokens:
   stage_a: 900
   stage_b: 2200
-time_budget_s: 9600        # stop starting new batches after 2h40m (Kaggle run limit 3h)
+time_budget_s: 8100        # stop starting new batches after 2h15m: install + model load + last batch fit the 3 h limit
 smoke_time_budget_s: 900

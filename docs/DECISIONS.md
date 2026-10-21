@@ -107,3 +107,15 @@ Smoke runs read `pod2post-data-smoke`, so files built from smoke data can never 
 - It closed the social-pack JSON early. A narrow repair applies to teacher data only, and evaluation stays strict.
 - Stage B grounding is now checked against the transcript only, matching evaluation, so entities invented in the notes can't reach training data.
 - Hashtags such as #BarackObama count as grounded when the name is in the transcript.
+
+**D27. The readability prompt was fixed before the full generation.** The smoke evaluation showed Flesch reading ease of about 20 for every system, and the teacher's own articles scored 30–43 against the spec's 50–70 target. The measurement was checked: prose-only scoring gives the same values. The Stage B prompt now asks for plain, conversational English: 12–16 words per sentence, everyday words, and technical terms explained. Flesch is now scored on prose sentences only, excluding headings and FAQ questions.
+
+**D28. `pipeline --full` enforces the smoke-first rule.** Before each full stage, if no completed smoke run of exactly the current code hash exists, the pipeline runs the smoke version first. Spec rule 4 is therefore automatic, not a manual step.
+
+**D29. Time budgets leave a margin before Kaggle's 3-hour hard limit.** A killed run may lose its outputs. The budgets are: teacher 2 h 15 m (after install and model load, with room for the final batch), SFT 2 h 30 m, and DPO 2 h of training (SFT sampling and the vLLM venv run first). A run that stops at its budget is resumed automatically.
+
+**D30. Robustness learned from the smoke runs.**
+- Status checks retry local network outages with backoff (a DNS failure on the laptop once killed a wait).
+- Downloads retry connection resets.
+- `wait` treats a transient "absent" answer for a kernel we pushed as a retry.
+- Every local data copy is verified by hash, after a disk fault zeroed a 16 KB block of one copy.

@@ -10,15 +10,18 @@ import statistics
 
 from src.data.filter import checkable_text, grounded_entity, ner_entities, norm, ungrounded_numbers
 from src.eval.faithfulness import faithfulness
-from src.eval.seo import article_parts, seo_checks, social_checks
+from src.eval.seo import seo_checks, social_checks
 
 FLESCH_TARGET = (50, 70)
 
 
 def flesch(article: str) -> float:
+    """Flesch reading ease on prose sentences only (headings and FAQ questions excluded)."""
     import textstat
 
-    return round(textstat.flesch_reading_ease(article_parts(article)["body"]), 1)
+    from src.eval.faithfulness import article_sentences
+
+    return round(textstat.flesch_reading_ease(" ".join(article_sentences(article))), 1)
 
 
 def score_episode(result: dict, chunks: list[str], scorer) -> dict:

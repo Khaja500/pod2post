@@ -177,3 +177,20 @@ def test_status_survives_a_network_blip(fake, monkeypatch):
     fake.status[f"{USER}/pod2post-00-smoke"] = "running"
     monkeypatch.setattr(kr, "run_cli", flaky)
     assert kr.kernel_status(f"{USER}/pod2post-00-smoke") == ("running", None) and calls["n"] == 3
+
+
+def test_full_stage_runs_its_smoke_first_when_code_changed(fake, monkeypatch):
+    monkeypatch.setattr(kr, "PUSH_GRACE_S", 0)
+    real_push = kr.cmd_push
+
+    def push_and_finish(args):  # the fake run completes as soon as it is pushed
+        rc = real_push(args)
+        fake.status[kr.kernel_ref(args.kernel, args.full)] = "complete"
+        return rc
+
+    monkeypatch.setattr(kr, "cmd_push", push_and_finish)
+    args = kr.argparse.Namespace(full=True, timeout=60, interval=0)
+    assert kr.run_stage("01_transcribe", args) is not None
+    assert [p["id"] for p in fake.pushes] == [f"{USER}/pod2post-01-transcribe-smoke", f"{USER}/pod2post-01-transcribe"]
+    assert kr.run_stage("01_transcribe", args) is not None          # smoke is now current: no second smoke
+    assert [p["id"] for p in fake.pushes][-1] == f"{USER}/pod2post-01-transcribe"

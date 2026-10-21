@@ -561,8 +561,21 @@ def needs_resume(kernel: str, out: Path) -> bool:
     return bool(key and manifest.is_file() and json.loads(manifest.read_text()).get(key, {}).get("stopped_by_time_budget"))
 
 
+def smoke_is_current(kernel: str) -> bool:
+    smoke = load_state()["runs"].get(nb.mode_slug(nb.template_slug(kernel), smoke=True), {})
+    return smoke.get("status") == "complete" and smoke.get("code_hash") == nb.code_hash(kernel)
+
+
 def run_stage(kernel: str, args) -> Path | None:
-    """push -> wait -> pull, then resume with --resume while the run stopped at its time budget."""
+    """push -> wait -> pull, then resume with --resume while the run stopped at its time budget.
+
+    A full stage whose exact code has no passing smoke run gets one first (spec rule 4)."""
+    if args.full and not smoke_is_current(kernel):
+        print(f"{kernel}: no passing smoke run of the current code; running the smoke version first.", flush=True)
+        smoke = argparse.Namespace(**{**vars(args), "full": False})
+        if run_stage(kernel, smoke) is None:
+            return None
+        print(f"=== {kernel} (full) ===", flush=True)
     resume = False
     for attempt in range(MAX_RESUMES + 1):
         step = argparse.Namespace(kernel=kernel, full=args.full, force=False, resume=resume, run_timeout=None,

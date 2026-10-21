@@ -144,13 +144,15 @@
     },
     "pod2post-05-eval-smoke": {
       "code_hash": "c7b6ba470248",
+      "finished_at": "2026-10-21T12:04:28+00:00",
       "kernel": "05_eval",
-      "logged": false,
+      "logged": true,
       "mode": "smoke",
       "note": "push recorded by hand: the pushing process was stopped before it saved state",
+      "pulled_to": "runs/2026-10-21/05_eval-smoke-v2",
       "pushed_at": "2026-10-21T09:47:35+00:00",
       "resume": false,
-      "status": "queued",
+      "status": "complete",
       "version": 2
     }
   }

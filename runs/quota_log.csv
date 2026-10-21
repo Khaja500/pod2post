@@ -16,3 +16,4 @@ kernel,slug,mode,version,code_hash,pushed_at,finished_at,wall_hours,kernel_runti
 02_teacher_gen,pod2post-02-teacher-gen-smoke,smoke,5,41fa0e1699f7,2026-10-21T06:20:05+00:00,2026-10-21T06:34:25+00:00,0.239,0.221,complete
 03_sft,pod2post-03-sft-smoke,smoke,3,a7b93e16074e,2026-10-21T06:35:20+00:00,2026-10-21T06:40:31+00:00,0.086,0.056,complete
 04_dpo,pod2post-04-dpo-smoke,smoke,3,e0b56b0bbeb4,2026-10-21T06:44:48+00:00,2026-10-21T08:36:43+00:00,1.865,0.346,complete
+05_eval,pod2post-05-eval-smoke,smoke,2,c7b6ba470248,2026-10-21T09:47:35+00:00,2026-10-21T12:04:28+00:00,2.281,0.487,complete

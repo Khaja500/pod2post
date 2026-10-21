@@ -17,7 +17,7 @@ lr_scheduler: cosine
 save_steps: 50
 train_on_responses_only: true
 seed: 42
-time_budget_s: 9600          # save + stop after 2h40m; rerun with --resume continues
+time_budget_s: 9000          # save + stop after 2h30m; rerun with --resume continues (Kaggle limit 3 h)
 
 smoke:
   num_examples: 10

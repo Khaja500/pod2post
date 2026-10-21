@@ -67,8 +67,11 @@ Meta description: <one sentence, at most 160 characters, contains the primary ke
 "newsletter": "<blurb of 40-70 words>", "pull_quotes": ["<3-5 quotes copied word for word from the notes>"]}}
 </social>
 
-The article body is 700-1000 words. Use the exact primary keyword 5-10 times in total, never more, and the \
-secondary keywords where they fit. The <social> block is one single JSON object containing all four keys."""
+The article body is 700-1000 words, written in plain, conversational English for a general reader: short \
+sentences (about 12-16 words on average), everyday words, active voice, and any technical term explained in a \
+few words (aim for a Flesch reading ease of 50-70). Use the exact primary keyword 5-10 times in total, never \
+more, and the secondary keywords where they fit. The <social> block is one single JSON object containing all \
+four keys."""
 
 
 def stage_a_messages(title: str, chunk: str, index: int, total: int) -> list[dict]:
