@@ -97,12 +97,14 @@
     },
     "pod2post-01-transcribe-smoke": {
       "code_hash": "eab3d1bc5e8a",
+      "finished_at": "2026-10-21T12:10:47+00:00",
       "kernel": "01_transcribe",
-      "logged": false,
+      "logged": true,
       "mode": "smoke",
+      "pulled_to": "runs/2026-10-21/01_transcribe-smoke-v6",
       "pushed_at": "2026-10-21T12:07:08+00:00",
       "resume": false,
-      "status": "queued",
+      "status": "complete",
       "version": 6
     },
     "pod2post-02-teacher-gen-smoke": {

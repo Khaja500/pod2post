@@ -194,3 +194,18 @@ def test_full_stage_runs_its_smoke_first_when_code_changed(fake, monkeypatch):
     assert [p["id"] for p in fake.pushes] == [f"{USER}/pod2post-01-transcribe-smoke", f"{USER}/pod2post-01-transcribe"]
     assert kr.run_stage("01_transcribe", args) is not None          # smoke is now current: no second smoke
     assert [p["id"] for p in fake.pushes][-1] == f"{USER}/pod2post-01-transcribe"
+
+
+def test_dataset_status_survives_a_network_blip(fake, monkeypatch):
+    calls = {"n": 0}
+
+    def flaky(args, timeout=120):
+        if args[:2] == ["datasets", "status"]:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return subprocess.CompletedProcess(args, 0, "('Connection aborted.', RemoteDisconnected('x'))", "")
+            return subprocess.CompletedProcess(args, 0, "ready\n", "")
+        return fake(args, timeout)
+
+    monkeypatch.setattr(kr, "run_cli", flaky)
+    assert kr.dataset_status(f"{USER}/pod2post-audio") == "ready" and calls["n"] == 2

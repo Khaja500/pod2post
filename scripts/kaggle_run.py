@@ -167,19 +167,27 @@ def parse_status(text: str) -> tuple[str, str | None]:
 
 
 NETWORK_ERROR_RE = re.compile(r"Max retries exceeded|NameResolutionError|Connection(Error| reset| aborted| broken)"
-                              r"|timed out|Temporary failure|50[234] Server Error", re.I)
+                              r"|RemoteDisconnected|timed out|Temporary failure|50[234] Server Error", re.I)
 NETWORK_RETRIES = 8  # about 20 minutes of backoff: a laptop losing Wi-Fi must not kill a long pipeline
 
 
-def kernel_status(ref: str) -> tuple[str, str | None]:
+def run_cli_read(args: list[str], timeout: int = 60) -> subprocess.CompletedProcess:
+    """A read-only CLI call, retried with backoff through network errors. (Pushes are never retried:
+    a push that succeeded but timed out would start a duplicate GPU session.)"""
     for attempt in range(NETWORK_RETRIES + 1):
-        out = run_cli(["kernels", "status", ref], timeout=60)
+        out = run_cli(args, timeout=timeout)
         text = out.stdout + out.stderr
         if not NETWORK_ERROR_RE.search(text) or STATUS_RE.search(text) or attempt == NETWORK_RETRIES:
-            break
+            return out
         wait_s = min(30 * 2 ** attempt, 300)
-        print(f"[{utcnow():%H:%M:%S}Z] network error checking {ref}; retrying in {wait_s}s", flush=True)
+        print(f"[{utcnow():%H:%M:%S}Z] network error on `kaggle {' '.join(args[:2])}`; retrying in {wait_s}s", flush=True)
         time.sleep(wait_s)
+    return out
+
+
+def kernel_status(ref: str) -> tuple[str, str | None]:
+    out = run_cli_read(["kernels", "status", ref])
+    text = out.stdout + out.stderr
     if STATUS_RE.search(text):
         return parse_status(text)
     if re.search(r"\b404\b|not found", text, re.I):
@@ -193,7 +201,7 @@ def kernel_status(ref: str) -> tuple[str, str | None]:
 
 def dataset_status(ref: str) -> str:
     """'ready' / 'pending' / ... or 'absent'. A missing dataset comes back as 403 (with exit code 0)."""
-    out = run_cli(["datasets", "status", ref], timeout=60)
+    out = run_cli_read(["datasets", "status", ref])
     text = (out.stdout + out.stderr).strip()
     if "403" in text or "404" in text:
         if ref.split("/", 1)[0] == username():
@@ -214,7 +222,7 @@ def flatten_log(text: str) -> str:
 
 
 def print_error_log(ref: str, lines: int = 50) -> None:
-    out = run_cli(["kernels", "logs", ref], timeout=180)
+    out = run_cli_read(["kernels", "logs", ref], timeout=180)
     print(f"--- last {lines} log lines of {ref} ---")
     print(tail(flatten_log(out.stdout or out.stderr), lines))
 
