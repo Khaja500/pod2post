@@ -557,6 +557,16 @@ def wait_dataset_ready(name: str, timeout_s: int = 1800) -> bool:
     return False
 
 
+def seed_smoke_dataset() -> bool:
+    """Smoke kernels read pod2post-data-smoke from 02 on; give it the base files before 02 runs."""
+    out = REPO / "data" / "smoke"
+    out.mkdir(parents=True, exist_ok=True)
+    for f in BASE_DATA_FILES:
+        shutil.copy2(REPO / "data" / "processed" / f, out / f)
+    ns = argparse.Namespace(name="data-smoke", message="base files", force=False)
+    return cmd_dataset(ns) == 0 and wait_dataset_ready("data-smoke")
+
+
 def build_training_data(teacher_out: Path, full: bool) -> bool:
     """Between 02 and 03: filter teacher outputs, build SFT + DPO data, upload the dataset."""
     tdir = teacher_out / "teacher"
@@ -595,7 +605,11 @@ def cmd_pipeline(args) -> int:
     sys.path.insert(0, str(REPO))
     stages = PIPELINE[PIPELINE.index(args.start):] if args.start else PIPELINE
     mode = "full" if args.full else "smoke"
-    for kernel in (k for k in stages if k not in args.skip):
+    todo = [k for k in stages if k not in args.skip]
+    if not args.full and any(k != "01_transcribe" for k in todo) and not seed_smoke_dataset():
+        print("Pipeline stopped: could not prepare the smoke dataset.")
+        return 1
+    for kernel in todo:
         print(f"\n=== {kernel} ({mode}) ===", flush=True)
         out = run_stage(kernel, args)
         if out is None:
