@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 
-from src.data.notes import merge_notes, parse_notes, pick_keywords
+from src.data.notes import merge_notes, parse_notes, pick_keywords, sanitize_notes
 from src.data.prompts import stage_a_messages, stage_b_messages
 from src.eval.seo import parse_output
 
@@ -29,8 +29,8 @@ def run(episodes: list[dict], gen, max_tokens: dict, notes_budget: int = 1800,
     t_map = time.time() - t0
 
     by_ep: dict[str, list] = {e["episode_id"]: [] for e in episodes}
-    for (e, _), n in zip(jobs, notes):
-        by_ep[e["episode_id"]].append(n)
+    for (e, i), n in zip(jobs, notes):  # same deterministic clean-up the teacher data had
+        by_ep[e["episode_id"]].append(sanitize_notes(n, e["chunks"][i]) if n is not None else None)
     results, b_convs = [], []
     for e in episodes:
         valid = [n for n in by_ep[e["episode_id"]] if n is not None]

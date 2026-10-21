@@ -95,3 +95,18 @@ def test_time_budget_stops_cleanly(data_dir, tmp_path):
 def test_smoke_selects_three_episodes(data_dir, tmp_path):
     stats = teacher.run(data_dir, tmp_path / "out", CFG, smoke=True)
     assert stats["selected_episodes"] == 3 and stats["generic"] == 1
+
+
+def test_format_retry_keeps_the_better_attempt():
+    bad = ARTICLE.replace("# Drone delivery", "# " + "Very long title " * 6)
+
+    class Gen:
+        def __init__(self):
+            self.temps = []
+
+        def chat(self, convs, max_tokens, temperature=None):
+            self.temps.append(temperature)
+            return [bad, ARTICLE] if temperature is None else [ARTICLE]
+
+    texts, retried = teacher.chat_with_format_retry(Gen(), [[], []], 10)
+    assert texts == [ARTICLE, ARTICLE] and retried == [True, False]

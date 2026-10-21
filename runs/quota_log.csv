@@ -10,3 +10,6 @@ kernel,slug,mode,version,code_hash,pushed_at,finished_at,wall_hours,kernel_runti
 04_dpo,pod2post-04-dpo-smoke,smoke,1,81a879d6a61a,2026-10-20T13:07:30+00:00,2026-10-20T13:09:37+00:00,0.035,0.004,complete
 02_teacher_gen,pod2post-02-teacher-gen-smoke,smoke,3,2359768b2da1,2026-10-20T12:44:32+00:00,2026-10-20T14:30:28+00:00,1.766,0.219,complete
 01_transcribe,pod2post-01-transcribe-smoke,smoke,5,f7f70c0b3674,2026-10-21T05:48:55+00:00,2026-10-21T05:49:57+00:00,0.017,0.009,complete
+02_teacher_gen,pod2post-02-teacher-gen-smoke,smoke,4,6417e37c984c,2026-10-21T05:51:10+00:00,2026-10-21T06:06:32+00:00,0.256,0.231,complete
+03_sft,pod2post-03-sft-smoke,smoke,2,2371ce5ceed7,2026-10-21T06:07:30+00:00,2026-10-21T06:11:37+00:00,0.069,0.053,complete
+04_dpo,pod2post-04-dpo-smoke,smoke,2,cc19d705f7c5,2026-10-21T06:15:41+00:00,2026-10-21T06:17:46+00:00,0.035,,error

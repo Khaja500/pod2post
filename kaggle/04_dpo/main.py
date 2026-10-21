@@ -19,8 +19,9 @@ from src import kaggle_env as K
 run = K.start_run(KERNEL, SMOKE, CODE_HASH)
 K.install_requirements(BUNDLE_DIR / "requirements-kaggle.txt", only=K.TRAIN_STACK)
 VENV = "/tmp/vllm-venv"
-if not os.path.exists(f"{VENV}/bin/python"):
-    subprocess.run([sys.executable, "-m", "venv", VENV], check=True)
+if not os.path.exists(f"{VENV}/bin/python"):  # Kaggle's Debian python has no ensurepip, so no `-m venv`
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "virtualenv"], check=True)
+    subprocess.run([sys.executable, "-m", "virtualenv", "-q", VENV], check=True)
     subprocess.run([f"{VENV}/bin/pip", "install", "-q", "pyyaml", "-r", str(K.filtered_requirements(
         BUNDLE_DIR / "requirements-kaggle.txt", ["vllm", "spacy", "en_core_web_sm"]))], check=True)
     subprocess.run([f"{VENV}/bin/pip", "uninstall", "-y", "-q", "torchaudio"], check=True)  # see 02_teacher_gen

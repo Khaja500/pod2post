@@ -26,6 +26,19 @@
         "id": "khajaaflal/pod2post-data",
         "private": true,
         "uploaded_at": "2026-10-20T11:54:43+00:00"
+      },
+      "data-smoke": {
+        "content_hash": "20fd729c4334",
+        "files": [
+          "chunks.jsonl",
+          "dpo_synthetic.jsonl",
+          "episodes.jsonl",
+          "sft.jsonl",
+          "test_ids.sha256"
+        ],
+        "id": "khajaaflal/pod2post-data-smoke",
+        "private": true,
+        "uploaded_at": "2026-10-21T06:07:22+00:00"
       }
     }
   },
@@ -95,40 +108,39 @@
       "version": 5
     },
     "pod2post-02-teacher-gen-smoke": {
-      "code_hash": "2359768b2da1",
-      "finished_at": "2026-10-20T14:30:28+00:00",
+      "code_hash": "6417e37c984c",
+      "finished_at": "2026-10-21T06:06:32+00:00",
       "kernel": "02_teacher_gen",
       "logged": true,
       "mode": "smoke",
-      "pulled_to": "runs/2026-10-20/02_teacher_gen-smoke-v3",
-      "pushed_at": "2026-10-20T12:44:32+00:00",
+      "pulled_to": "runs/2026-10-21/02_teacher_gen-smoke-v4",
+      "pushed_at": "2026-10-21T05:51:10+00:00",
       "resume": false,
       "status": "complete",
-      "version": 3
+      "version": 4
     },
     "pod2post-03-sft-smoke": {
-      "code_hash": "b9749146002b",
-      "finished_at": "2026-10-20T13:07:17+00:00",
+      "code_hash": "2371ce5ceed7",
+      "finished_at": "2026-10-21T06:11:37+00:00",
       "kernel": "03_sft",
       "logged": true,
       "mode": "smoke",
-      "pulled_to": "runs/2026-10-20/03_sft-smoke-v1",
-      "pushed_at": "2026-10-20T11:57:42+00:00",
+      "pulled_to": "runs/2026-10-21/03_sft-smoke-v2",
+      "pushed_at": "2026-10-21T06:07:30+00:00",
       "resume": false,
       "status": "complete",
-      "version": 1
+      "version": 2
     },
     "pod2post-04-dpo-smoke": {
-      "code_hash": "81a879d6a61a",
-      "finished_at": "2026-10-20T13:09:37+00:00",
+      "code_hash": "cc19d705f7c5",
+      "finished_at": "2026-10-21T06:17:46+00:00",
       "kernel": "04_dpo",
       "logged": true,
       "mode": "smoke",
-      "pulled_to": "runs/2026-10-20/04_dpo-smoke-v1",
-      "pushed_at": "2026-10-20T13:07:30+00:00",
+      "pushed_at": "2026-10-21T06:15:41+00:00",
       "resume": false,
-      "status": "complete",
-      "version": 1
+      "status": "error",
+      "version": 2
     },
     "pod2post-05-eval-smoke": {
       "code_hash": "35178b0cbc59",

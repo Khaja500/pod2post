@@ -51,6 +51,20 @@ def parse_notes(text: str) -> dict | None:
             "keywords": strings(raw["keywords"])}
 
 
+def sanitize_notes(notes: dict, chunk: str) -> dict:
+    """Deterministic clean-up before merging: drop quotes that are not verbatim in the chunk, and
+    entities / figures the chunk does not contain. Used by the teacher run and by inference alike."""
+    from src.data.filter import grounded_entity, norm, ungrounded_numbers
+
+    src = norm(chunk)
+    return {**notes,
+            "quotes": [q for q in notes["quotes"] if norm(q["quote"]) in src],
+            "entities": [e for e in notes["entities"] if grounded_entity(e, src)],
+            "numbers": [n for n in notes["numbers"] if not ungrounded_numbers(n, chunk)],
+            "claims": [c for c in notes["claims"] if not ungrounded_numbers(c["claim"], chunk)],
+            "key_points": [k for k in notes["key_points"] if not ungrounded_numbers(k, chunk)]}
+
+
 def _norm(text: str) -> str:
     return " ".join(WORD_RE.findall(text.lower()))
 

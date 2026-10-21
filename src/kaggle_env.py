@@ -58,6 +58,10 @@ def write_text(rel: str, text: str) -> Path:
 # --- run manifest (read back by scripts/kaggle_run.py for the quota log) ---
 
 def start_run(kernel: str, smoke: int, code_hash: str) -> dict:
+    if ON_KAGGLE:  # libraries that write caches to the cwd (Unsloth's tokenizer cache) stay out of outputs
+        scratch = Path("/tmp/pod2post-cwd")
+        scratch.mkdir(exist_ok=True)
+        os.chdir(scratch)
     run = {
         "kernel": kernel,
         "smoke": bool(smoke),

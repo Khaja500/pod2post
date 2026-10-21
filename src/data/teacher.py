@@ -20,9 +20,10 @@ from collections import defaultdict
 from pathlib import Path
 
 from src.data.chunk import read_jsonl
-from src.data.notes import merge_notes, parse_notes, pick_keywords
+from src.data.notes import merge_notes, parse_notes, pick_keywords, sanitize_notes
 from src.data.prompts import stage_a_messages, stage_b_messages
 from src.data.testset import HASH_FILE, assert_no_test_leak
+from src.eval.seo import format_problems, parse_output
 
 GENERIC_SYSTEM = "You are an editor. You rewrite content exactly as instructed and keep its format."
 GENERIC_USER = """Rewrite the content below so that it becomes generic and vague: remove the specific names, \
@@ -64,6 +65,22 @@ def _append(path: Path, rows: list[dict]) -> None:
     with path.open("a", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+def _n_problems(text: str) -> int:
+    return len(format_problems(*parse_output(text, repair=True)))
+
+
+def chat_with_format_retry(teacher, convs: list, max_tokens: int) -> tuple[list[str], list[bool]]:
+    """Generate, then retry once (temperature 0.5) the outputs that break a hard format rule;
+    keep whichever attempt breaks fewer rules. Data generation only; evaluation is single-shot."""
+    texts = teacher.chat(convs, max_tokens)
+    retry = [i for i, t in enumerate(texts) if _n_problems(t)]
+    if retry:
+        for i, t in zip(retry, teacher.chat([convs[i] for i in retry], max_tokens, temperature=0.5)):
+            if _n_problems(t) < _n_problems(texts[i]):
+                texts[i] = t
+    return texts, [i in retry for i in range(len(texts))]
 
 
 def _batches(items: list, size: int):
@@ -125,7 +142,8 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, smoke: bool, resume_dir: Path 
         got = notes_by_ep.get(e, {})
         if e in done_b or len(got) < len(by_ep[e]) or any(n is None for n in got.values()):
             continue  # unfinished, or a chunk whose notes never parsed
-        ordered = [got[i] for i in sorted(got)]
+        text_of = {c["chunk_idx"]: c["text"] for c in by_ep[e]}
+        ordered = [sanitize_notes(got[i], text_of[i]) for i in sorted(got)]
         primary, secondary = pick_keywords(ordered)
         if primary:
             ready.append({"episode_id": e, "title": titles[e], "primary_keyword": primary,
@@ -134,9 +152,10 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, smoke: bool, resume_dir: Path 
     for batch in _batches(ready, cfg["batch_size"]):
         if out_of_time():
             break
-        texts = teacher.chat([stage_b_messages(r["title"], r["notes_text"], r["primary_keyword"],
-                                               r["secondary_keywords"]) for r in batch], cfg["max_tokens"]["stage_b"])
-        _append(b_path, [{**r, "output": t} for r, t in zip(batch, texts)])
+        texts, retried = chat_with_format_retry(teacher, [stage_b_messages(
+            r["title"], r["notes_text"], r["primary_keyword"], r["secondary_keywords"]) for r in batch],
+            cfg["max_tokens"]["stage_b"])
+        _append(b_path, [{**r, "output": t, "retried": f} for r, t, f in zip(batch, texts, retried)])
         print(f"[teacher] stage B {len(_load(b_path))} episodes, {time.time() - t0:.0f}s", flush=True)
 
     # 4. Generic rewrites for DPO.
@@ -148,9 +167,9 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, smoke: bool, resume_dir: Path 
     for batch in _batches(sources, cfg["batch_size"]):
         if out_of_time():
             break
-        texts = teacher.chat([[{"role": "system", "content": GENERIC_SYSTEM},
-                               {"role": "user", "content": GENERIC_USER.format(output=r["output"])}] for r in batch],
-                             cfg["max_tokens"]["stage_b"])
+        texts, _ = chat_with_format_retry(teacher, [[{"role": "system", "content": GENERIC_SYSTEM},
+                                                     {"role": "user", "content": GENERIC_USER.format(output=r["output"])}]
+                                                    for r in batch], cfg["max_tokens"]["stage_b"])
         _append(g_path, [{"episode_id": r["episode_id"], "output": t} for r, t in zip(batch, texts)])
 
     elapsed = time.time() - t0
