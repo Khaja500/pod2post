@@ -87,3 +87,5 @@ It has 4.0B parameters, slightly above the spec's "~3B", so the headline should 
 - Prompt plus response comes to about 3.9k tokens.
 - `build_sft` drops any example still over 4,096 and logs the count.
 - At 900–1,400 words, a Stage B example came to about 5k tokens, which would have forced either truncation or a longer max length than a T4 can train.
+
+**D24. Kernels that install vLLM uninstall torchaudio.** vllm 0.32.0 installs torch 2.13, a CUDA 13.0 build. Its `torchaudio==2.11.0` pin is satisfied by Kaggle's preinstalled 2.11.0+cu128, so pip leaves that in place. torchaudio then raises a CUDA-version mismatch at import, and `transformers.audio_utils` imports torchaudio whenever it is installed. None of these kernels process audio, so they remove it. This was found by the first teacher smoke run.

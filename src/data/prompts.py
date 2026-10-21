@@ -29,8 +29,10 @@ Return a JSON object with exactly these keys:
 - "entities": people, organisations, products and places named in the segment.
 - "numbers": figures, dates or statistics, each with a few words of context.
 - "keywords": 2-5 search phrases a reader might use to find this topic.
-Use the speaker names written in the transcript, or null if there are none. Use the timestamp shown \
-before a line ("mm:ss" or "h:mm:ss") or null. Use [] or "" when the segment has nothing for a key."""
+Write every name exactly as it appears in the transcript; never expand or complete it (if the transcript \
+says "Trump", write "Trump"). Each quote must be one continuous passage from a single speaker's line, copied \
+exactly; never join text from different lines. Use the timestamp shown before a line ("mm:ss" or "h:mm:ss") \
+or null. Use [] or "" when the segment has nothing for a key."""
 
 STAGE_B_SYSTEM = (
     "You are an SEO content writer for podcasts. From an episode's notes you write a long-form article "
@@ -65,8 +67,8 @@ Meta description: <one sentence, at most 160 characters, contains the primary ke
 "newsletter": "<blurb of 40-70 words>", "pull_quotes": ["<3-5 quotes copied word for word from the notes>"]}}
 </social>
 
-The article body is 700-1000 words. Use the primary keyword naturally about 5-10 times and the \
-secondary keywords where they fit."""
+The article body is 700-1000 words. Use the exact primary keyword 5-10 times in total, never more, and the \
+secondary keywords where they fit. The <social> block is one single JSON object containing all four keys."""
 
 
 def stage_a_messages(title: str, chunk: str, index: int, total: int) -> list[dict]:

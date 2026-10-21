@@ -46,9 +46,14 @@ QUOTA_FIELDS = ["kernel", "slug", "mode", "version", "code_hash", "pushed_at", "
                 "wall_hours", "kernel_runtime_hours", "status"]
 PIPELINE = ["01_transcribe", "02_teacher_gen", "03_sft", "04_dpo", "05_eval"]
 DATASETS = {  # name -> (Kaggle slug, local folder, files; None = every file in the folder)
-    "data": ("pod2post-data", "data/processed", ["episodes.jsonl", "chunks.jsonl", "test_ids.sha256"]),
+    "data": ("pod2post-data", "data/processed", None),
+    "data-smoke": ("pod2post-data-smoke", "data/smoke", None),  # smoke runs never touch the real dataset
     "audio": ("pod2post-audio", "data/raw/audio", None),
 }
+BASE_DATA_FILES = ["episodes.jsonl", "chunks.jsonl", "test_ids.sha256"]
+LOCAL_PY = str(REPO / ".venv" / "bin" / "python") if (REPO / ".venv" / "bin" / "python").is_file() else sys.executable
+MAX_RESUMES = 3
+ABSENT_RETRIES = 5  # the status API sometimes answers "denied" for a kernel that exists
 ACTIVE = {"queued", "running", "new_script", "cancel_requested"}
 TERMINAL = {"complete", "error", "cancel_acknowledged"}
 WEEKLY_WARN_HOURS = 20.0
@@ -437,9 +442,13 @@ def cmd_wait(args) -> int:
     run = load_state()["runs"].get(ref.split("/", 1)[1], {})
     pushed = datetime.fromisoformat(run["pushed_at"]) if "pushed_at" in run else None
     deadline = time.time() + args.timeout
-    last, seen_active = None, False
+    last, seen_active, absent_seen = None, False, 0
     while True:
         status, failure = kernel_status(ref)
+        if status == "absent" and pushed is not None and absent_seen < ABSENT_RETRIES:
+            absent_seen += 1  # we pushed this run, so "absent" is a transient API answer
+            time.sleep(args.interval)
+            continue
         seen_active |= status in ACTIVE
         if status != last:
             print(f"[{utcnow():%H:%M:%S}Z] {ref}: {status}", flush=True)
@@ -491,17 +500,114 @@ def cmd_logs(args) -> int:
     return 0
 
 
-def cmd_pipeline(args) -> int:
-    stages = PIPELINE[PIPELINE.index(args.start):] if args.start else PIPELINE
-    for kernel in (k for k in stages if k not in args.skip):
-        print(f"\n=== {kernel} ({'full' if args.full else 'smoke'}) ===", flush=True)
-        step = argparse.Namespace(kernel=kernel, full=args.full, force=False, resume=False, run_timeout=None,
+def local(*module_args: str, capture: Path | None = None) -> int:
+    """Run a repo module locally (in .venv when present), e.g. local("src.data.filter", dir)."""
+    print(f"$ python -m {' '.join(module_args)}", flush=True)
+    out = subprocess.run([LOCAL_PY, "-m", *module_args], cwd=REPO, capture_output=capture is not None, text=True)
+    if capture is not None:
+        capture.write_text(out.stdout, encoding="utf-8")
+        print(out.stdout + out.stderr, flush=True)
+    return out.returncode
+
+
+def pulled_dir(kernel: str, full: bool) -> Path:
+    return REPO / load_state()["runs"][kernel_ref(kernel, full).split("/", 1)[1]]["pulled_to"]
+
+
+def needs_resume(kernel: str, out: Path) -> bool:
+    if kernel == "02_teacher_gen":
+        stats = out / "teacher" / "teacher_stats.json"
+        return stats.is_file() and bool(json.loads(stats.read_text()).get("stopped_early"))
+    key = {"03_sft": "sft", "04_dpo": "dpo"}.get(kernel)
+    manifest = out / "run_manifest.json"
+    return bool(key and manifest.is_file() and json.loads(manifest.read_text()).get(key, {}).get("stopped_by_time_budget"))
+
+
+def run_stage(kernel: str, args) -> Path | None:
+    """push -> wait -> pull, then resume with --resume while the run stopped at its time budget."""
+    resume = False
+    for attempt in range(MAX_RESUMES + 1):
+        step = argparse.Namespace(kernel=kernel, full=args.full, force=False, resume=resume, run_timeout=None,
                                   timeout=args.timeout, interval=args.interval)
         for fn in (cmd_push, cmd_wait, cmd_pull):
             if fn(step) != 0:
                 print(f"Pipeline stopped at {kernel} ({fn.__name__[4:]}).")
-                return 1
-    print("\nPipeline complete.")
+                return None
+        out = pulled_dir(kernel, args.full)
+        if not needs_resume(kernel, out):
+            return out
+        print(f"{kernel} stopped at its time budget; resuming ({attempt + 1}/{MAX_RESUMES}).", flush=True)
+        resume = True
+    print(f"{kernel} is still unfinished after {MAX_RESUMES} resumes.")
+    return None
+
+
+def wait_dataset_ready(name: str, timeout_s: int = 1800) -> bool:
+    ref = f"{username()}/{DATASETS[name][0]}"
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        status = dataset_status(ref)
+        if status == "ready":
+            return True
+        print(f"dataset {ref}: {status}", flush=True)
+        time.sleep(30)
+    return False
+
+
+def build_training_data(teacher_out: Path, full: bool) -> bool:
+    """Between 02 and 03: filter teacher outputs, build SFT + DPO data, upload the dataset."""
+    tdir = teacher_out / "teacher"
+    if local("src.data.filter", str(tdir)) != 0:
+        return False
+    report = json.loads((tdir / "filter_report.json").read_text())
+    if full:
+        cfg = __import__("yaml").safe_load((REPO / "configs" / "teacher.yaml").read_text())["targets"]
+        kept_a, kept_b = report["stage_a"]["kept"], report["stage_b"]["kept"]
+        if kept_a < 0.7 * cfg["stage_a"] or kept_b < 0.7 * cfg["stage_b"]:  # Phase 3 acceptance (spec §9)
+            print(f"Phase 3 acceptance failed: {kept_a} Stage A / {kept_b} Stage B survived filtering "
+                  f"(need >= 70% of {cfg['stage_a']} / {cfg['stage_b']}). See {rel(tdir / 'filter_report.json')}.")
+            return False
+        out, dataset = REPO / "data" / "processed", "data"
+    else:
+        out, dataset = REPO / "data" / "smoke", "data-smoke"
+        out.mkdir(parents=True, exist_ok=True)
+        for f in BASE_DATA_FILES:
+            shutil.copy2(REPO / "data" / "processed" / f, out / f)
+        kept = tdir / "filtered_stage_b.jsonl"
+        if len(kept.read_text().splitlines()) < 3:
+            # Smoke only tests plumbing: top up with parseable rejected rows so 03/04 have data.
+            from src.eval.seo import parse_output  # noqa: E402 (repo import, local only)
+            extra = [line for line in (tdir / "rejected_stage_b.jsonl").read_text().splitlines()
+                     if all(parse_output(json.loads(line)["output"], repair=True))]
+            kept.write_text(kept.read_text() + "".join(line + "\n" for line in extra))
+    for module in ("src.data.build_sft", "src.data.build_dpo"):
+        if local(module, str(tdir), str(out)) != 0:
+            return False
+    ns = argparse.Namespace(name=dataset, message=f"from {teacher_out.name}", force=False)
+    return cmd_dataset(ns) == 0 and wait_dataset_ready(dataset)
+
+
+def cmd_pipeline(args) -> int:
+    """The whole project: 01 -> 05 with the local steps in between (spec §7.3, plan.md)."""
+    sys.path.insert(0, str(REPO))
+    stages = PIPELINE[PIPELINE.index(args.start):] if args.start else PIPELINE
+    mode = "full" if args.full else "smoke"
+    for kernel in (k for k in stages if k not in args.skip):
+        print(f"\n=== {kernel} ({mode}) ===", flush=True)
+        out = run_stage(kernel, args)
+        if out is None:
+            return 1
+        if kernel == "01_transcribe" and args.full:
+            wer_file = out / "transcripts" / "changelog-661.json"
+            if wer_file.is_file():
+                local("src.asr.wer", str(wer_file), capture=out / "wer.json")
+        if kernel == "02_teacher_gen" and not build_training_data(out, args.full):
+            print("Pipeline stopped after 02_teacher_gen (local data build).")
+            return 1
+        if kernel == "05_eval":
+            target = [] if args.full else ["--out", str(out / "results.md")]
+            local("src.eval.report", str(out), *target)
+    print(f"\nPipeline complete ({mode}).")
     return 0
 
 
@@ -587,7 +693,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--full", action="store_true")
     p.add_argument("--from", dest="start", choices=PIPELINE)
     p.add_argument("--skip", nargs="*", default=[], choices=PIPELINE)
-    p.add_argument("--timeout", type=parse_duration, default=4 * 3600)
+    p.add_argument("--timeout", type=parse_duration, default=8 * 3600, help="per-stage wait (queue + run)")
     p.add_argument("--interval", type=parse_duration, default=60)
     p.set_defaults(fn=cmd_pipeline)
     sub.add_parser("quota", help="GPU hours used (local log + Kaggle counter)").set_defaults(fn=cmd_quota)

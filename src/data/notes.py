@@ -14,6 +14,12 @@ from typing import Callable
 NOTE_KEYS = ["summary", "key_points", "claims", "quotes", "entities", "numbers", "keywords"]
 JSON_OBJ_RE = re.compile(r"\{.*\}", re.S)
 WORD_RE = re.compile(r"[a-z0-9']+")
+NULLISH = {"", "null", "none", "n/a", "na", "unknown", "-"}
+
+
+def _opt(value) -> str | None:
+    text = str(value).strip() if value is not None else ""
+    return None if text.lower() in NULLISH else text
 
 
 def parse_notes(text: str) -> dict | None:
@@ -35,8 +41,8 @@ def parse_notes(text: str) -> dict | None:
         out = []
         for x in v if isinstance(v, list) else []:
             if isinstance(x, dict) and str(x.get(field) or "").strip():
-                out.append({"speaker": x.get("speaker") or None, field: str(x[field]).strip(),
-                            "timestamp": x.get("timestamp") or None})
+                out.append({"speaker": _opt(x.get("speaker")), field: str(x[field]).strip(),
+                            "timestamp": _opt(x.get("timestamp"))})
         return out
 
     return {"summary": str(raw["summary"] or "").strip(), "key_points": strings(raw["key_points"]),

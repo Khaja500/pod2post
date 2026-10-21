@@ -5,7 +5,7 @@
   (d) a generic/vague rewrite of it (made by the teacher in 02_teacher_gen)
 mixed ~25% each over 300 Stage B prompts.
 
-  .venv/bin/python -m src.data.build_dpo runs/<date>/02_teacher_gen-v<N>/teacher
+  .venv/bin/python -m src.data.build_dpo runs/<date>/02_teacher_gen-v<N>/teacher [out_dir]
 writes data/processed/dpo_synthetic.jsonl with (b), (c), (d) candidates for every prompt.
 The 04_dpo kernel adds (a) and calls assemble() to pick the final mix.
 """
@@ -107,18 +107,19 @@ def assemble(prompts: list[dict], sft_failures: dict[str, str], seed: int, n: in
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 1:
+    if len(argv) not in (1, 2):
         print(__doc__)
         return 1
     teacher_dir = Path(argv[0])
     data_dir = REPO / "data" / "processed"
+    out_dir = Path(argv[1]) if len(argv) == 2 else data_dir
     rng = random.Random(yaml.safe_load((REPO / "configs" / "dpo.yaml").read_text())["seed"])
     chosen_rows = list(read_jsonl(teacher_dir / "filtered_stage_b.jsonl"))
     generic = {r["episode_id"]: r["output"] for r in read_jsonl(teacher_dir / "generic.jsonl")}
     assert_no_test_leak({r["episode_id"] for r in chosen_rows}, data_dir / HASH_FILE)
     out, kinds = [], {t: 0 for t in TYPES[1:]}
     for r in chosen_rows:
-        article, social = parse_output(r["output"])
+        article, social = parse_output(r["output"], repair=True)
         kw = r["primary_keyword"]
         rejected = {}
         if (h := inject_hallucination(article, social, kw, r["notes_text"], rng)):
@@ -126,7 +127,7 @@ def main(argv: list[str]) -> int:
         if (s := keyword_stuff(article, social, kw, rng)):
             rejected["keyword_stuffed"] = canonical_output(*s)
         if r["episode_id"] in generic:
-            g_article, g_social = parse_output(generic[r["episode_id"]])
+            g_article, g_social = parse_output(generic[r["episode_id"]], repair=True)
             if not format_problems(g_article, g_social):
                 rejected["generic"] = canonical_output(g_article, g_social)
         for k in rejected:
@@ -134,8 +135,8 @@ def main(argv: list[str]) -> int:
         out.append({"episode_id": r["episode_id"], "primary_keyword": kw, "notes_text": r["notes_text"],
                     "prompt": stage_b_messages(r["title"], r["notes_text"], kw, r["secondary_keywords"]),
                     "chosen": canonical_output(article, social), "rejected": rejected})
-    n = write_jsonl(data_dir / "dpo_synthetic.jsonl", out)
-    print(f"wrote {n} DPO prompts -> {data_dir / 'dpo_synthetic.jsonl'}; rejected candidates: {kinds}")
+    n = write_jsonl(out_dir / "dpo_synthetic.jsonl", out)
+    print(f"wrote {n} DPO prompts -> {out_dir / 'dpo_synthetic.jsonl'}; rejected candidates: {kinds}")
     return 0
 
 

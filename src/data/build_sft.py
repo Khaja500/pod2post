@@ -1,6 +1,6 @@
 """Phase 3: filtered teacher outputs -> chat-format SFT data (one adapter, two tasks).
 
-  .venv/bin/python -m src.data.build_sft runs/<date>/02_teacher_gen-v<N>/teacher
+  .venv/bin/python -m src.data.build_sft runs/<date>/02_teacher_gen-v<N>/teacher [out_dir]
 
 Writes data/processed/sft.jsonl: {id, task: "A"|"B", episode_id, split: "train"|"val", messages}.
 Targets are canonical: Stage A notes re-serialised as JSON, Stage B rebuilt as
@@ -31,11 +31,12 @@ def canonical_output(article: str, social: dict) -> str:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 1:
+    if len(argv) not in (1, 2):
         print(__doc__)
         return 1
     teacher_dir = Path(argv[0])
     data_dir = REPO / "data" / "processed"
+    out_dir = Path(argv[1]) if len(argv) == 2 else data_dir
     cfg = yaml.safe_load((REPO / "configs" / "teacher.yaml").read_text())
     rng = random.Random(cfg["seed"])
     chunks = {(c["episode_id"], c["chunk_idx"]): c for c in read_jsonl(data_dir / "chunks.jsonl")}
@@ -58,7 +59,7 @@ def main(argv: list[str]) -> int:
                      "split": "val" if r["episode_id"] in val_eps else "train", "messages": msgs})
     for r in b_rows:
         msgs = stage_b_messages(r["title"], r["notes_text"], r["primary_keyword"], r["secondary_keywords"])
-        article, social = parse_output(r["output"])
+        article, social = parse_output(r["output"], repair=True)
         msgs.append({"role": "assistant", "content": canonical_output(article, social)})
         rows.append({"id": f"B:{r['episode_id']}", "task": "B", "episode_id": r["episode_id"],
                      "primary_keyword": r["primary_keyword"],
@@ -71,9 +72,9 @@ def main(argv: list[str]) -> int:
     print(f"dropped {len(too_long)} examples longer than {MAX_SEQ} tokens "
           f"({sum(r['task'] == 'B' for r in too_long)} Stage B)")
     rng.shuffle(rows)
-    n = write_jsonl(data_dir / "sft.jsonl", rows)
+    n = write_jsonl(out_dir / "sft.jsonl", rows)
     counts = {f"{t}/{s}": sum(r["task"] == t and r["split"] == s for r in rows) for t in "AB" for s in ("train", "val")}
-    print(f"wrote {n} SFT examples -> {data_dir / 'sft.jsonl'}: {counts}")
+    print(f"wrote {n} SFT examples -> {out_dir / 'sft.jsonl'}: {counts}")
     return 0
 
 

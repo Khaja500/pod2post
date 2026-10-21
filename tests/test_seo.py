@@ -47,3 +47,10 @@ def test_format_problems_and_social():
     assert format_problems(None, None) == ["missing_article"]
     assert "invalid_social_json" in format_problems(make_article(), {"linkedin": "only"})
     assert social_checks({"linkedin": "a", "x_thread": ["ok"], "newsletter": "c", "pull_quotes": []})["x_posts_ok"]
+
+
+def test_json_repair_is_opt_in():
+    text = ('<article>\n# T\n</article>\n<social>\n{"linkedin": "post #Tag"}  \n"x_thread": ["a", "b",],\n'
+            '"newsletter": "n", "pull_quotes": ["q"]}\n</social>')
+    assert parse_output(text)[1] is None                         # evaluation stays strict
+    assert parse_output(text, repair=True)[1]["x_thread"] == ["a", "b"]

@@ -94,23 +94,49 @@
       "version": 4
     },
     "pod2post-02-teacher-gen-smoke": {
-      "code_hash": "902199fd4226",
+      "code_hash": "2359768b2da1",
+      "finished_at": "2026-10-20T14:30:28+00:00",
       "kernel": "02_teacher_gen",
-      "logged": false,
+      "logged": true,
       "mode": "smoke",
-      "pushed_at": "2026-10-20T12:34:46+00:00",
+      "pulled_to": "runs/2026-10-20/02_teacher_gen-smoke-v3",
+      "pushed_at": "2026-10-20T12:44:32+00:00",
       "resume": false,
-      "status": "queued",
-      "version": 2
+      "status": "complete",
+      "version": 3
     },
     "pod2post-03-sft-smoke": {
       "code_hash": "b9749146002b",
+      "finished_at": "2026-10-20T13:07:17+00:00",
       "kernel": "03_sft",
-      "logged": false,
+      "logged": true,
       "mode": "smoke",
+      "pulled_to": "runs/2026-10-20/03_sft-smoke-v1",
       "pushed_at": "2026-10-20T11:57:42+00:00",
       "resume": false,
-      "status": "queued",
+      "status": "complete",
+      "version": 1
+    },
+    "pod2post-04-dpo-smoke": {
+      "code_hash": "81a879d6a61a",
+      "finished_at": "2026-10-20T13:09:37+00:00",
+      "kernel": "04_dpo",
+      "logged": true,
+      "mode": "smoke",
+      "pulled_to": "runs/2026-10-20/04_dpo-smoke-v1",
+      "pushed_at": "2026-10-20T13:07:30+00:00",
+      "resume": false,
+      "status": "complete",
+      "version": 1
+    },
+    "pod2post-05-eval-smoke": {
+      "code_hash": "35178b0cbc59",
+      "kernel": "05_eval",
+      "logged": false,
+      "mode": "smoke",
+      "pushed_at": "2026-10-20T13:09:49+00:00",
+      "resume": false,
+      "status": "absent",
       "version": 1
     }
   }

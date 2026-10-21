@@ -6,3 +6,6 @@ pyarrow>=17
 tokenizers>=0.22
 huggingface_hub>=1.0
 jiwer>=4.0
+spacy>=3.8              # + python -m spacy download en_core_web_sm (filtering NER)
+datasketch>=1.6
+textstat==0.7.13

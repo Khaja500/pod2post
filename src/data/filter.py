@@ -24,7 +24,8 @@ from src.eval.seo import format_problems, parse_output
 NUM_RE = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")
 ENTITY_LABELS = {"PERSON", "ORG", "GPE", "LOC", "PRODUCT", "EVENT", "WORK_OF_ART", "NORP", "FAC", "LAW"}
 ENTITY_ALLOW = {"faq", "seo", "linkedin", "twitter", "x", "podcast", "episode", "newsletter"}
-SMALL_NUMBER_MAX = 10  # "3 takeaways", "5 questions": structural, often spelled out in speech
+SMALL_NUMBER_MAX = 10
+HASHTAG_RE = re.compile(r"#(\w+)")  # "3 takeaways", "5 questions": structural, often spelled out in speech
 
 
 def norm(text: str) -> str:
@@ -48,7 +49,10 @@ def grounded_entity(entity: str, source_norm: str) -> bool:
     if e.strip() in ENTITY_ALLOW or e in source_norm:
         return True
     tokens = [t for t in e.split() if len(t) >= 3]
-    return bool(tokens) and all(f" {t} " in source_norm for t in tokens)
+    if tokens and all(f" {t} " in source_norm for t in tokens):
+        return True
+    compact = e.replace(" ", "")  # "#BarackObama" vs "Barack Obama"
+    return len(compact) >= 6 and compact in source_norm.replace(" ", "")
 
 
 @lru_cache(maxsize=1)
@@ -72,7 +76,8 @@ def checkable_text(article: str, social: dict | None) -> str:
     social_text = []
     for v in (social or {}).values():
         social_text += v if isinstance(v, list) else [v]
-    return "\n".join(body + [str(t) for t in social_text])
+    text = "\n".join(body + [str(t) for t in social_text])
+    return HASHTAG_RE.sub(lambda m: re.sub(r"(?<=[a-z])(?=[A-Z])", " ", m[1]), text)
 
 
 def stage_a_problems(chunk: str, notes: dict | None) -> list[str]:
@@ -91,12 +96,14 @@ def stage_a_problems(chunk: str, notes: dict | None) -> list[str]:
 
 
 def stage_b_problems(output: str, notes_text: str, transcript: str, title: str) -> list[str]:
-    article, social = parse_output(output)
+    """Grounding is checked against the transcript (+ title) only, like the evaluation:
+    an entity the notes invented must not survive into training data."""
+    article, social = parse_output(output, repair=True)
     problems = format_problems(article, social)
     if article is None:
         return problems
     generated = checkable_text(article, social)
-    source = "\n".join([notes_text, transcript, title])
+    source = "\n".join([transcript, title])
     src = norm(source)
     if any(not grounded_entity(e, src) for e in ner_entities(generated)):
         problems.append("ungrounded_entity")
@@ -151,7 +158,7 @@ def main(argv: list[str]) -> int:
     b_rows = list(read_jsonl(teacher_dir / "stage_b.jsonl"))
     b_problems = [stage_b_problems(r["output"], r["notes_text"], "\n".join(transcripts[r["episode_id"]]), r["title"])
                   for r in b_rows]
-    for i in near_duplicates([parse_output(r["output"])[0] or r["output"] for r in b_rows]):
+    for i in near_duplicates([parse_output(r["output"], repair=True)[0] or r["output"] for r in b_rows]):
         b_problems[i].append("near_duplicate")
 
     write_jsonl(teacher_dir / "filtered_stage_a.jsonl", (r for r, p in zip(a_rows, a_problems) if not p))

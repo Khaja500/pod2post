@@ -57,3 +57,16 @@ def test_stage_b_flags_invented_entity_and_number(spacy_available):
     bad = ok.replace("Zipline delivers blood.", "Zipline delivers blood, said Jeff Bezos, to 73% of Kenya.")
     problems = stage_b_problems(bad, "notes", CHUNK, "Title")
     assert "ungrounded_entity" in problems and "ungrounded_number" in problems
+
+
+def test_hashtags_and_compact_names_are_grounded():
+    from src.data.filter import checkable_text
+    src = norm("Former president Barack Obama spoke.")
+    assert grounded_entity("BarackObama", src)
+    assert "Barack Obama" in checkable_text("body", {"x_thread": ["Watch #BarackObama now"]})
+
+
+def test_nullish_timestamps_become_none():
+    from src.data.notes import parse_notes
+    n = parse_notes(json.dumps(notes(quotes=[{"speaker": "null", "quote": "q", "timestamp": "null"}])))
+    assert n["quotes"][0]["timestamp"] is None and n["quotes"][0]["speaker"] is None

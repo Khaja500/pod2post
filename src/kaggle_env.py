@@ -212,6 +212,12 @@ def install_requirements(req: Path, only: list[str] | None = None) -> None:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(req)], check=True)
 
 
+def pip_uninstall(packages: list[str]) -> None:
+    """Remove preinstalled packages that clash with what a kernel installed. Skipped off Kaggle."""
+    if ON_KAGGLE:
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "-q", *packages], check=True)
+
+
 def import_versions(modules: list[str]) -> dict:
     """Import each module (in order) and return its version. Skipped off Kaggle."""
     if not ON_KAGGLE:

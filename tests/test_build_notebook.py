@@ -112,3 +112,11 @@ def test_code_hash_tracks_only_used_code():
     assert "src/data/teacher.py" not in deps and "configs/teacher.yaml" not in deps
     teacher_deps = {p.relative_to(nb.REPO).as_posix() for p in nb.kernel_deps("02_teacher_gen")}
     assert {"src/data/teacher.py", "src/data/prompts.py", "src/infer/generator.py", "configs/teacher.yaml"} <= teacher_deps
+
+
+def test_smoke_builds_read_the_smoke_dataset(tmp_path):
+    out, meta, _ = nb.build("03_sft", "tester", smoke=True, out_root=tmp_path)
+    assert meta["dataset_sources"] == ["tester/pod2post-data-smoke"]
+    assert "DATA = 'pod2post-data-smoke'" in code_of(out / "run.ipynb")
+    _, full, _ = nb.build("03_sft", "tester", smoke=False, out_root=tmp_path)
+    assert full["dataset_sources"] == ["tester/pod2post-data"]

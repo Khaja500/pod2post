@@ -27,6 +27,7 @@ KAGGLE_DIR = REPO / "kaggle"
 BUILD_DIR = REPO / "build" / "kaggle"
 PLACEHOLDER = "<KAGGLE_USERNAME>"
 PROJECT_PREFIX = "pod2post-"
+SMOKE_DATASETS = {"pod2post-data"}  # smoke runs read pod2post-data-smoke, so smoke-built files never mix in
 CELL_RE = re.compile(r"^# %%(.*)$")
 
 
@@ -107,6 +108,11 @@ def render_metadata(template: dict, username: str, smoke: bool, resume: bool) ->
         # Attach this kernel's own previous output so training can resume from its checkpoints.
         sources.append(meta["id"])
     meta["kernel_sources"] = sources
+    datasets = []
+    for ref in meta.get("dataset_sources", []):
+        owner, name = ref.split("/", 1)
+        datasets.append(f"{owner}/{name}-smoke" if smoke and name in SMOKE_DATASETS else ref)
+    meta["dataset_sources"] = datasets
     return meta
 
 
@@ -135,6 +141,8 @@ def parse_cells(source: str) -> list[tuple[str, str]]:
 def config_cell(kernel: str, meta: dict, smoke: bool, resume: bool, digest: str) -> str:
     own = meta["id"]
     upstream = [ref.split("/", 1)[1] for ref in meta["kernel_sources"] if ref != own]
+    data = next((ref.split("/", 1)[1] for ref in meta.get("dataset_sources", [])
+                 if ref.split("/", 1)[1].startswith("pod2post-data")), None)
     return "\n".join([
         "# Config cell (generated). SMOKE=1: 10 examples, 5 steps, < 10 minutes (spec §7.5).",
         f"KERNEL = {kernel!r}",
@@ -143,6 +151,7 @@ def config_cell(kernel: str, meta: dict, smoke: bool, resume: bool, digest: str)
         f"RESUME = {resume}",
         f"CODE_HASH = {digest!r}",
         f"UPSTREAM = {upstream!r}  # attached kernel outputs, excluding this kernel",
+        f"DATA = {data!r}  # the pod2post-data dataset this run reads (smoke runs use their own copy)",
         "CFG = dict(KERNEL=KERNEL, SLUG=SLUG, SMOKE=SMOKE, RESUME=RESUME, CODE_HASH=CODE_HASH, UPSTREAM=UPSTREAM)",
     ])
 

@@ -55,6 +55,10 @@ def headline(systems: dict) -> str | None:
 
 
 def main(argv: list[str]) -> int:
+    out = REPO / "reports" / "results.md"
+    if "--out" in argv:
+        i = argv.index("--out")
+        out, argv = Path(argv[i + 1]), argv[:i] + argv[i + 2:]
     if not argv:
         print(__doc__)
         return 1
@@ -104,8 +108,7 @@ def main(argv: list[str]) -> int:
                       f"SEO {pct(sc['seo_score'])} · invented entities {sc.get('hallucinated_entities')}", "",
                       "> " + " ".join(art[:220]) + (" …" if len(art) > 220 else ""), ""]
     lines += ["## Runs", ""] + [f"- {LABELS[n]}: `{sources[n]}`" for n in names]
-    out = REPO / "reports" / "results.md"
-    out.parent.mkdir(exist_ok=True)
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"wrote {out}")
     return 0

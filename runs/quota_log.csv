@@ -5,3 +5,7 @@ kernel,slug,mode,version,code_hash,pushed_at,finished_at,wall_hours,kernel_runti
 01_transcribe,pod2post-01-transcribe-smoke,smoke,2,a44b4ce12696,2026-10-20T12:21:16+00:00,2026-10-20T12:24:44+00:00,0.058,,error
 01_transcribe,pod2post-01-transcribe-smoke,smoke,3,493dbb216478,2026-10-20T12:29:51+00:00,2026-10-20T12:31:31+00:00,0.028,0.011,complete
 01_transcribe,pod2post-01-transcribe-smoke,smoke,4,dd226fe5158d,2026-10-20T12:32:50+00:00,2026-10-20T12:34:24+00:00,0.026,0.012,complete
+02_teacher_gen,pod2post-02-teacher-gen-smoke,smoke,2,902199fd4226,2026-10-20T12:34:46+00:00,2026-10-20T12:43:05+00:00,0.139,,error
+03_sft,pod2post-03-sft-smoke,smoke,1,b9749146002b,2026-10-20T11:57:42+00:00,2026-10-20T13:07:17+00:00,1.160,0.001,complete
+04_dpo,pod2post-04-dpo-smoke,smoke,1,81a879d6a61a,2026-10-20T13:07:30+00:00,2026-10-20T13:09:37+00:00,0.035,0.004,complete
+02_teacher_gen,pod2post-02-teacher-gen-smoke,smoke,3,2359768b2da1,2026-10-20T12:44:32+00:00,2026-10-20T14:30:28+00:00,1.766,0.219,complete

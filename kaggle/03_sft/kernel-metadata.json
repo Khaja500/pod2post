@@ -8,10 +8,10 @@
   "enable_gpu": true,
   "enable_internet": true,
   "machine_shape": "NvidiaTeslaT4",
-  "dataset_sources": [],
-  "kernel_sources": [
-    "<KAGGLE_USERNAME>/pod2post-02-teacher-gen"
+  "dataset_sources": [
+    "<KAGGLE_USERNAME>/pod2post-data"
   ],
+  "kernel_sources": [],
   "competition_sources": [],
   "model_sources": []
 }

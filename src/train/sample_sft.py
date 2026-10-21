@@ -37,7 +37,7 @@ def main(argv: list[str]) -> int:
         for text in texts[i * SAMPLES:(i + 1) * SAMPLES]:
             problems = stage_b_problems(text, p["notes_text"], "\n".join(transcripts[p["episode_id"]]), "")
             if problems:
-                article, social = parse_output(text)
+                article, social = parse_output(text, repair=True)
                 failures[p["episode_id"]] = {"episode_id": p["episode_id"], "problems": problems,
                                              "output": canonical_output(article, social) if article and social else text}
                 break

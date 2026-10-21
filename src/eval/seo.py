@@ -20,17 +20,34 @@ MIN_H2, DENSITY = 3, (0.005, 0.025)
 SOCIAL_KEYS = ["linkedin", "x_thread", "newsletter", "pull_quotes"]
 
 
-def parse_output(text: str) -> tuple[str | None, dict | None]:
-    """-> (article markdown, social dict); None for a part that is missing or invalid."""
+EARLY_CLOSE_RE = re.compile(r'"\s*\}\s*,?\s*\n\s*"(?=\w+"\s*:)')
+TRAILING_COMMA_RE = re.compile(r",\s*([\]}])")
+
+
+def _load_json(text: str, repair: bool):
+    try:
+        return json.loads(text)
+    except ValueError:
+        if not repair:
+            return None
+    try:  # teacher slips: object closed after the first key, trailing commas
+        return json.loads(TRAILING_COMMA_RE.sub(r"\1", EARLY_CLOSE_RE.sub('",\n"', text)))
+    except ValueError:
+        return None
+
+
+def parse_output(text: str, repair: bool = False) -> tuple[str | None, dict | None]:
+    """-> (article markdown, social dict); None for a part that is missing or invalid.
+
+    repair=True fixes two common JSON slips; it is used only for teacher data, whose
+    targets are re-serialised anyway. Evaluation parses strictly.
+    """
     a = ARTICLE_RE.search(text or "")
     article = a[1].strip() if a else None
     social = None
     s = SOCIAL_RE.search(text or "")
     if s and (m := JSON_OBJ_RE.search(s[1])):
-        try:
-            social = json.loads(m[0])
-        except ValueError:
-            social = None
+        social = _load_json(m[0], repair)
     return article, social if isinstance(social, dict) else None
 
 
