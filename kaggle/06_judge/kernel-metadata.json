@@ -1,0 +1,19 @@
+{
+  "id": "<KAGGLE_USERNAME>/pod2post-06-judge",
+  "title": "pod2post-06-judge",
+  "code_file": "run.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": [
+    "<KAGGLE_USERNAME>/pod2post-data"
+  ],
+  "kernel_sources": [
+    "<KAGGLE_USERNAME>/pod2post-05-eval"
+  ],
+  "competition_sources": [],
+  "model_sources": []
+}

@@ -44,7 +44,7 @@ STATE = RUNS / "state.json"
 QUOTA_LOG = RUNS / "quota_log.csv"
 QUOTA_FIELDS = ["kernel", "slug", "mode", "version", "code_hash", "pushed_at", "finished_at",
                 "wall_hours", "kernel_runtime_hours", "status"]
-PIPELINE = ["01_transcribe", "02_teacher_gen", "03_sft", "04_dpo", "05_eval"]
+PIPELINE = ["01_transcribe", "02_teacher_gen", "03_sft", "04_dpo", "05_eval", "06_judge"]
 DATASETS = {  # name -> (Kaggle slug, local folder, files; None = every file in the folder)
     "data": ("pod2post-data", "data/processed", None),
     "data-smoke": ("pod2post-data-smoke", "data/smoke", None),  # smoke runs never touch the real dataset
@@ -669,9 +669,11 @@ def cmd_pipeline(args) -> int:
         if kernel == "02_teacher_gen" and not build_training_data(out, args.full):
             print("Pipeline stopped after 02_teacher_gen (local data build).")
             return 1
-        if kernel == "05_eval":
-            target = [] if args.full else ["--out", str(out / "results.md")]
-            local("src.eval.report", str(out), *target)
+        if kernel in ("05_eval", "06_judge"):
+            eval_dir = out if kernel == "05_eval" else pulled_dir("05_eval", args.full)
+            target = [] if args.full else ["--out", str(eval_dir / "results.md")]
+            judge = ["--judge", str(out / "judge.json")] if kernel == "06_judge" else []
+            local("src.eval.report", str(eval_dir), *target, *judge)
     print(f"\nPipeline complete ({mode}).")
     return 0
 

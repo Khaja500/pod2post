@@ -1,6 +1,6 @@
 """Write reports/results.md from pulled 05_eval output folders (spec §6).
 
-  .venv/bin/python -m src.eval.report runs/<date>/05_eval-v<N> [runs/... more]
+  .venv/bin/python -m src.eval.report runs/<date>/05_eval-v<N> [runs/... more] [--judge judge.json] [--out results.md]
 
 Later folders override earlier ones per system, so the baseline run (Phase 4) and the
 final run (Phase 7) can be combined. Every number in the report comes from results.json.
@@ -55,10 +55,12 @@ def headline(systems: dict) -> str | None:
 
 
 def main(argv: list[str]) -> int:
-    out = REPO / "reports" / "results.md"
-    if "--out" in argv:
-        i = argv.index("--out")
-        out, argv = Path(argv[i + 1]), argv[:i] + argv[i + 2:]
+    out, judge_path = REPO / "reports" / "results.md", None
+    for flag in ("--out", "--judge"):
+        if flag in argv:
+            i = argv.index(flag)
+            value, argv = Path(argv[i + 1]), argv[:i] + argv[i + 2:]
+            out, judge_path = (value, judge_path) if flag == "--out" else (out, value)
     if not argv:
         print(__doc__)
         return 1
@@ -90,11 +92,13 @@ def main(argv: list[str]) -> int:
         lines.append(f"| `{c}` | " + " | ".join(pct(systems[n]["seo_check_pass_rates"].get(c)) for n in names) + " |")
     lines += ["", "Other: article produced " + ", ".join(f"{LABELS[n]} {pct(systems[n]['article_present_rate'])}" for n in names)
               + "; invalid Stage A JSON " + ", ".join(f"{LABELS[n]} {pct(systems[n]['stage_a_invalid_rate'])}" for n in names) + "."]
-    if (REPO / "reports" / "judge.json").is_file():
-        judge = json.loads((REPO / "reports" / "judge.json").read_text())
+    if judge_path and judge_path.is_file():
+        judge = json.loads(judge_path.read_text())
         lines += ["", "## LLM judge (pairwise vs base, teacher model as judge)", "",
                   "| System | Win | Tie | Loss |", "|---|---|---|---|"]
         lines += [f"| {LABELS[k]} | {pct(v['win'])} | {pct(v['tie'])} | {pct(v['loss'])} |" for k, v in judge.items()]
+        lines += ["", "Each pair is judged in both A/B orders; a system wins an episode only if it wins one order and "
+                  "does not lose the other."]
 
     lines += ["", "## Side-by-side examples", ""]
     common = sorted(set.intersection(*(set(outputs[n]) for n in names)))
