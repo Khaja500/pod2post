@@ -58,6 +58,8 @@ ACTIVE = {"queued", "running", "new_script", "cancel_requested"}
 TERMINAL = {"complete", "error", "cancel_acknowledged"}
 WEEKLY_WARN_HOURS = 20.0
 RUN_TIMEOUT_S = {"smoke": 20 * 60, "full": 3 * 3600}  # spec: smoke < 10 min, every job < 3 h
+# Kernels that install vLLM spend ~8-12 min on install + model download + engine start before any work.
+SMOKE_TIMEOUT_OVERRIDES = {"02_teacher_gen": 50 * 60, "04_dpo": 50 * 60, "05_eval": 50 * 60}
 PUSH_GRACE_S = 180  # `kernels status` has no version argument; right after a push it may still report the old run
 HOSTS = {
     "api.kaggle.com": "Kaggle API (kaggle CLI 2.x)",
@@ -407,7 +409,8 @@ def cmd_push(args) -> int:
         return 1
     warn_quota()
 
-    timeout = args.run_timeout or RUN_TIMEOUT_S[mode]
+    timeout = args.run_timeout or (SMOKE_TIMEOUT_OVERRIDES.get(args.kernel) if mode == "smoke" else None) \
+        or RUN_TIMEOUT_S[mode]
     out = run_cli(["kernels", "push", "-p", str(out_dir), "-t", str(timeout)], timeout=600)
     text = (out.stdout + out.stderr).strip()
     print(text)

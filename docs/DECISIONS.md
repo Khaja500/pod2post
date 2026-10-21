@@ -89,3 +89,21 @@ It has 4.0B parameters, slightly above the spec's "~3B", so the headline should 
 - At 900–1,400 words, a Stage B example came to about 5k tokens, which would have forced either truncation or a longer max length than a T4 can train.
 
 **D24. Kernels that install vLLM uninstall torchaudio.** vllm 0.32.0 installs torch 2.13, a CUDA 13.0 build. Its `torchaudio==2.11.0` pin is satisfied by Kaggle's preinstalled 2.11.0+cu128, so pip leaves that in place. torchaudio then raises a CUDA-version mismatch at import, and `transformers.audio_utils` imports torchaudio whenever it is installed. None of these kernels process audio, so they remove it. This was found by the first teacher smoke run.
+
+## 2026-10-21 · End-to-end pipeline
+
+**D25. `kaggle_run.py pipeline` runs the whole project.** It runs 01 → 05 and does the local steps in between:
+- After 02: filter, `build_sft`, `build_dpo`, then dataset upload. In full mode it also enforces the Phase 3 acceptance rule (≥70% of target survives).
+- `--resume` is used whenever a run stopped at its time budget.
+- WER is computed after 01 (full mode) and the report is written after 05.
+
+Smoke runs read `pod2post-data-smoke`, so files built from smoke data can never reach the real dataset. Smoke runs of the vLLM kernels (02, 04, 05) get 50 minutes instead of 20, because install, model download and engine start take 8–12 minutes before any work.
+
+**D26. Teacher review findings, fixed before the full generation.**
+- The teacher expanded names ("Donald Trump" where the transcript says "Trump"). The prompt now requires names copied exactly.
+- It spliced two speakers' lines into one quote. Quotes must now be one continuous passage from a single speaker.
+- It wrote timestamps as the string "null". These are parsed as empty.
+- It overused the keyword: a density of 2.7% against the 2.5% ceiling. The prompt now caps it at 10 uses.
+- It closed the social-pack JSON early. A narrow repair applies to teacher data only, and evaluation stays strict.
+- Stage B grounding is now checked against the transcript only, matching evaluation, so entities invented in the notes can't reach training data.
+- Hashtags such as #BarackObama count as grounded when the name is in the transcript.
