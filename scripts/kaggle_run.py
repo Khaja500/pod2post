@@ -166,9 +166,20 @@ def parse_status(text: str) -> tuple[str, str | None]:
     return m[1].rsplit(".", 1)[-1].lower(), (failure[1] if failure else None)
 
 
+NETWORK_ERROR_RE = re.compile(r"Max retries exceeded|NameResolutionError|Connection(Error| reset| aborted| broken)"
+                              r"|timed out|Temporary failure|50[234] Server Error", re.I)
+NETWORK_RETRIES = 8  # about 20 minutes of backoff: a laptop losing Wi-Fi must not kill a long pipeline
+
+
 def kernel_status(ref: str) -> tuple[str, str | None]:
-    out = run_cli(["kernels", "status", ref], timeout=60)
-    text = out.stdout + out.stderr
+    for attempt in range(NETWORK_RETRIES + 1):
+        out = run_cli(["kernels", "status", ref], timeout=60)
+        text = out.stdout + out.stderr
+        if not NETWORK_ERROR_RE.search(text) or STATUS_RE.search(text) or attempt == NETWORK_RETRIES:
+            break
+        wait_s = min(30 * 2 ** attempt, 300)
+        print(f"[{utcnow():%H:%M:%S}Z] network error checking {ref}; retrying in {wait_s}s", flush=True)
+        time.sleep(wait_s)
     if STATUS_RE.search(text):
         return parse_status(text)
     if re.search(r"\b404\b|not found", text, re.I):

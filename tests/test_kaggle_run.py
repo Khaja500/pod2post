@@ -162,3 +162,18 @@ def test_dataset_status_treats_own_403_as_absent(fake, monkeypatch):
     monkeypatch.setattr(kr, "run_cli", cli)
     assert kr.dataset_status(f"{USER}/pod2post-data") == "ready"
     assert kr.dataset_status(f"{USER}/missing") == "absent"
+
+
+def test_status_survives_a_network_blip(fake, monkeypatch):
+    calls = {"n": 0}
+
+    def flaky(args, timeout=120):
+        if args[:2] == ["kernels", "status"]:
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                return subprocess.CompletedProcess(args, 1, "", "Max retries exceeded (NameResolutionError)")
+        return fake(args, timeout)
+
+    fake.status[f"{USER}/pod2post-00-smoke"] = "running"
+    monkeypatch.setattr(kr, "run_cli", flaky)
+    assert kr.kernel_status(f"{USER}/pod2post-00-smoke") == ("running", None) and calls["n"] == 3
