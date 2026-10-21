@@ -53,6 +53,7 @@ DATASETS = {  # name -> (Kaggle slug, local folder, files; None = every file in 
 BASE_DATA_FILES = ["episodes.jsonl", "chunks.jsonl", "test_ids.sha256"]
 LOCAL_PY = str(REPO / ".venv" / "bin" / "python") if (REPO / ".venv" / "bin" / "python").is_file() else sys.executable
 MAX_RESUMES = 3
+PULL_RETRIES = 4
 ABSENT_RETRIES = 5  # the status API sometimes answers "denied" for a kernel that exists
 ACTIVE = {"queued", "running", "new_script", "cancel_requested"}
 TERMINAL = {"complete", "error", "cancel_acknowledged"}
@@ -484,10 +485,15 @@ def cmd_pull(args) -> int:
                                       "pushed_at": utcnow().isoformat()}
     dest = pull_dir(run)
     dest.mkdir(parents=True, exist_ok=True)
-    out = run_cli(["kernels", "output", ref, "-p", str(dest), "-o"], timeout=1800)
-    if out.returncode != 0:
-        print((out.stdout + out.stderr).strip())
-        return 1
+    for attempt in range(1, PULL_RETRIES + 1):  # downloads sometimes die with "connection reset"
+        out = run_cli(["kernels", "output", ref, "-p", str(dest), "-o"], timeout=1800)
+        text = (out.stdout + out.stderr).strip()
+        if out.returncode == 0 and not re.search(r"Connection (broken|reset)|Max retries", text):
+            break
+        print(f"pull attempt {attempt}/{PULL_RETRIES} failed: {tail(text, 3)}", flush=True)
+        if attempt == PULL_RETRIES:
+            return 1
+        time.sleep(30 * attempt)
     files = sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*") if p.is_file())
     print(f"pulled {len(files)} files -> {rel(dest)}")
     for f in files[:40]:
