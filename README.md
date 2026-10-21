@@ -14,7 +14,22 @@ Podcast episode → SEO article + social pack, using a QLoRA-post-trained (SFT +
 
 Never paste a key into chat or commit one. The secret file names are git-ignored and `check` flags any that get tracked.
 
-## Running kernels
+## Run the whole project
+
+```
+python3 scripts/kaggle_run.py pipeline          # every stage in SMOKE mode (tiny data, minutes per kernel)
+python3 scripts/kaggle_run.py pipeline --full   # the real thing: ~10-15 GPU-hours on Kaggle T4s
+python3 scripts/kaggle_run.py pipeline --full --from 03_sft   # pick up from a stage
+```
+
+`pipeline` runs 01 transcribe → 02 teacher generation → 03 SFT → 04 DPO → 05 evaluation → 06 LLM judge on Kaggle. It also does the local steps in between:
+- **After 02:** filter → build SFT/DPO data → upload the dataset. In full mode it also checks the Phase 3 acceptance rule.
+- **After 01:** WER is computed (full mode).
+- **After 05 and 06:** `reports/results.md` is written.
+
+If a long run stops at its time budget, the pipeline resumes it automatically. In full mode, a stage whose current code has never passed a smoke run gets one first. Network blips are retried rather than ending the run.
+
+## Running kernels one at a time
 
 ```
 python scripts/kaggle_run.py push 00_smoke    # GPU / install / environment check (~10 min)
@@ -69,3 +84,19 @@ python3 scripts/kaggle_run.py dataset    # upload as the private Kaggle dataset 
 ```
 
 Sources and licenses are listed in `data/SOURCES.md`. The test-set IDs are stored as hashes in `data/processed/test_ids.sha256`, and training code refuses to run on them.
+
+## Demo (Phase 8)
+
+```
+.venv/bin/pip install gradio
+python3 app/gradio_app.py --adapter runs/<date>/04_dpo-v<N>/adapter --backend hf   # local: CPU / Apple GPU (slow)
+```
+
+In a Kaggle GPU notebook with the `pod2post-04-dpo` output attached, use the fast vLLM backend and a public link:
+
+```
+!git clone <this repo> pod2post && cd pod2post && pip install -q vllm==0.32.0 gradio && pip uninstall -y -q torchaudio
+!python app/gradio_app.py --adapter /kaggle/input/pod2post-04-dpo/adapter --share
+```
+
+Paste a transcript (`Speaker: text` lines or plain paragraphs) or upload a short audio clip, which faster-whisper transcribes. The demo returns the article, the social pack, the SEO checks, and any names or numbers the article uses that are not in the transcript. It runs the same pipeline code that the evaluation scored.

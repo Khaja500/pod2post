@@ -95,6 +95,16 @@
       "status": "complete",
       "version": 1
     },
+    "pod2post-01-transcribe": {
+      "code_hash": "eab3d1bc5e8a",
+      "kernel": "01_transcribe",
+      "logged": false,
+      "mode": "full",
+      "pushed_at": "2026-10-21T12:14:21+00:00",
+      "resume": false,
+      "status": "queued",
+      "version": 1
+    },
     "pod2post-01-transcribe-smoke": {
       "code_hash": "eab3d1bc5e8a",
       "finished_at": "2026-10-21T12:10:47+00:00",

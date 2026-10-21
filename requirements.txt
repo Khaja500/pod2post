@@ -9,3 +9,4 @@ jiwer>=4.0
 spacy>=3.8              # + python -m spacy download en_core_web_sm (filtering NER)
 datasketch>=1.6
 textstat==0.7.13
+gradio>=5              # demo only (app/gradio_app.py)
