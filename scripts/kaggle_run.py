@@ -82,6 +82,24 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(microsecond=0)
 
 
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def copy_verified(src: Path, dst: Path) -> None:
+    """Copy and confirm the bytes match: a local disk fault once zeroed a 16 KB block of a copy."""
+    want = sha256_file(src)
+    for _ in range(2):
+        shutil.copy2(src, dst)
+        if sha256_file(dst) == want:
+            return
+    die(f"copy of {src} keeps differing from the source; the disk may be failing (run Disk Utility > First Aid)")
+
+
 def die(msg: str) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(1)
@@ -568,7 +586,7 @@ def seed_smoke_dataset() -> bool:
     out = REPO / "data" / "smoke"
     out.mkdir(parents=True, exist_ok=True)
     for f in BASE_DATA_FILES:
-        shutil.copy2(REPO / "data" / "processed" / f, out / f)
+        copy_verified(REPO / "data" / "processed" / f, out / f)
     ns = argparse.Namespace(name="data-smoke", message="base files", force=False)
     return cmd_dataset(ns) == 0 and wait_dataset_ready("data-smoke")
 
@@ -591,7 +609,7 @@ def build_training_data(teacher_out: Path, full: bool) -> bool:
         out, dataset = REPO / "data" / "smoke", "data-smoke"
         out.mkdir(parents=True, exist_ok=True)
         for f in BASE_DATA_FILES:
-            shutil.copy2(REPO / "data" / "processed" / f, out / f)
+            copy_verified(REPO / "data" / "processed" / f, out / f)
         kept = tdir / "filtered_stage_b.jsonl"
         if len(kept.read_text().splitlines()) < 3:
             # Smoke only tests plumbing: top up with parseable rejected rows so 03/04 have data.
@@ -649,7 +667,7 @@ def cmd_dataset(args) -> int:
     stage.mkdir(parents=True)
     digest = hashlib.sha256()
     for f in files:
-        shutil.copy2(src / f, stage / f)
+        copy_verified(src / f, stage / f)
         digest.update(f.encode() + (src / f).read_bytes())
     digest = digest.hexdigest()[:12]
     (stage / "dataset-metadata.json").write_text(json.dumps(
