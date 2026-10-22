@@ -44,6 +44,12 @@ def kernel_deps(kernel: str) -> list[Path]:
     main = KAGGLE_DIR / kernel / "main.py"
     seen: set[Path] = set()
     stack = [main]
+    # Modules a kernel launches as subprocesses ("-m", "src.train.sample_sft") count too.
+    for name in re.findall(r"[\"'](src(?:\.\w+)+)[\"']", main.read_text(encoding="utf-8")):
+        cand = REPO.joinpath(*name.split(".")).with_suffix(".py")
+        if cand.is_file() and cand not in seen:
+            seen.add(cand)
+            stack.append(cand)
     while stack:
         for node in ast.walk(ast.parse(stack.pop().read_text(encoding="utf-8"))):
             if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] == "src":

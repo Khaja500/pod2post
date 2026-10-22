@@ -119,3 +119,20 @@ Smoke runs read `pod2post-data-smoke`, so files built from smoke data can never 
 - Downloads retry connection resets.
 - `wait` treats a transient "absent" answer for a kernel we pushed as a retry.
 - Every local data copy is verified by hash, after a disk fault zeroed a 16 KB block of one copy.
+
+## 2026-10-22 · Phase 3 result
+
+**D31. Entity grounding now accepts normal name variants.** The first full teacher run kept only 168 of 508 Stage B articles, below the ≥280 acceptance bar. 55% were flagged for an "invented entity", but sampling showed most were false positives:
+- country forms, abbreviations and demonyms ("U.S.", "the United States", "American" when the speaker said "America")
+- acronyms in either direction ("ACA" ↔ "Affordable Care Act")
+- full names when the transcript has only the surname ("Donald Trump" for "Trump")
+- glued lowercase hashtags ("#trentonduckett")
+- NER noise ("n’t")
+
+`grounded_entity` now accepts aliases, stem variants, acronyms, and full names or phrases whose head word plus at least half their words are in the source. Hashtags are not checked. An entity sharing nothing with the transcript is still ungrounded. The entities still flagged are real additions from world knowledge (Amy Coney Barrett, Sarah Palin, the NFL, dates the transcript never states).
+
+Re-filtering the same output, with no new generation: Stage A kept 1,331 of 1,861 and Stage B 315 of 508. Both are above the acceptance bar. Evaluation uses the same function, so every system is scored by the same rule.
+
+**D32. Kernels that launch `src` modules as subprocesses include them in their code hash.** `04_dpo` runs `-m src.train.sample_sft`, which the import scan missed.
+
+**D33. Phase 2 results.** Six episodes (about 6 h of audio) were transcribed at about 60× real time (real-time factor 0.017). Raw WER against Changelog #661's human transcript is 21.1%. Of that, 16.9 points are insertions: Whisper keeps the fillers and false starts the edited reference removes. Substitutions plus deletions come to 4.1%.

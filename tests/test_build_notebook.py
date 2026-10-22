@@ -120,3 +120,8 @@ def test_smoke_builds_read_the_smoke_dataset(tmp_path):
     assert "DATA = 'pod2post-data-smoke'" in code_of(out / "run.ipynb")
     _, full, _ = nb.build("03_sft", "tester", smoke=False, out_root=tmp_path)
     assert full["dataset_sources"] == ["tester/pod2post-data"]
+
+
+def test_subprocess_modules_count_in_the_hash():
+    deps = {p.relative_to(nb.REPO).as_posix() for p in nb.kernel_deps("04_dpo")}
+    assert {"src/train/sample_sft.py", "src/data/filter.py", "src/infer/generator.py"} <= deps

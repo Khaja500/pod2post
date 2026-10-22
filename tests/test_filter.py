@@ -63,10 +63,25 @@ def test_hashtags_and_compact_names_are_grounded():
     from src.data.filter import checkable_text
     src = norm("Former president Barack Obama spoke.")
     assert grounded_entity("BarackObama", src)
-    assert "Barack Obama" in checkable_text("body", {"x_thread": ["Watch #BarackObama now"]})
 
 
 def test_nullish_timestamps_become_none():
     from src.data.notes import parse_notes
     n = parse_notes(json.dumps(notes(quotes=[{"speaker": "null", "quote": "q", "timestamp": "null"}])))
     assert n["quotes"][0]["timestamp"] is None and n["quotes"][0]["speaker"] is None
+
+
+def test_grounding_accepts_normal_name_variants_but_not_inventions():
+    src = norm("President Bush said the Affordable Care Act would hurt America. Republicans and the CDC agreed. "
+               "Trump spoke later about the Democrats.")
+    for ok in ["U.S.", "the United States", "American", "Americans", "ACA", "Centers for Disease Control",
+               "George W. Bush", "Donald Trump", "Republican", "the Democratic Party", "n’t"]:
+        assert grounded_entity(ok, src), ok
+    for bad in ["Jeff Bezos", "Hollywood", "Kenya", "the UK", "Google"]:
+        assert not grounded_entity(bad, src), bad
+
+
+def test_hashtags_are_not_checked_as_entities():
+    from src.data.filter import checkable_text
+    text = checkable_text("Body text.", {"x_thread": ["Read this #trentonduckett #BarackObama"]})
+    assert "#" not in text and "trentonduckett" not in text

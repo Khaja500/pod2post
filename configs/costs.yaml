@@ -1,0 +1,22 @@
+# Free cost estimate (spec §6 "Cost/latency", §1 headline "Z× lower cost"): no API calls are made.
+# API cost/article = the pipeline's own token counts (prompt tokens rebuilt exactly from the test
+# transcripts, completion tokens as measured on Kaggle) x published per-token prices. An API model
+# would emit somewhat different token counts (other tokenizer, other verbosity), so this is an estimate.
+#
+# Prices: OpenRouter public model list, https://openrouter.ai/api/v1/models, checked 2026-10-21.
+# USD per 1M tokens.
+checked: 2026-10-21
+comparator: qwen/qwen3.8-max-0902      # the "large API model" named in the headline
+api_models:
+  qwen/qwen3.8-max-0902:       {input: 2.00,  output: 6.00}
+  qwen/qwen3.7-plus:           {input: 0.32,  output: 1.28}
+  anthropic/claude-sonnet-5.5: {input: 2.00,  output: 10.00}
+  openai/gpt-6.1-sol:          {input: 2.00,  output: 10.00}
+  google/gemini-3.8-flash:     {input: 0.825, output: 4.125}
+  deepseek/deepseek-v4-pro:    {input: 0.407, output: 0.814}
+
+# Self-hosted: measured seconds per episode on ONE T4 x hourly price.
+self_hosted_usd_per_hour:
+  kaggle_t4_free_tier: 0.0     # 30 GPU-h/week at no charge
+  aws_g4dn_xlarge: 0.526       # 1x T4, 4 vCPU, 16 GiB, on-demand (instances.vantage.sh, updated 2026-10-21)
+reference_gpu: aws_g4dn_xlarge # used for the Z× ratio, so "free Kaggle" doesn't make the ratio infinite

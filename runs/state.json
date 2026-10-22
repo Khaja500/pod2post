@@ -97,12 +97,14 @@
     },
     "pod2post-01-transcribe": {
       "code_hash": "eab3d1bc5e8a",
+      "finished_at": "2026-10-21T12:22:35+00:00",
       "kernel": "01_transcribe",
-      "logged": false,
+      "logged": true,
       "mode": "full",
+      "pulled_to": "runs/2026-10-21/01_transcribe-v1",
       "pushed_at": "2026-10-21T12:14:21+00:00",
       "resume": false,
-      "status": "queued",
+      "status": "complete",
       "version": 1
     },
     "pod2post-01-transcribe-smoke": {
@@ -117,17 +119,29 @@
       "status": "complete",
       "version": 6
     },
+    "pod2post-02-teacher-gen": {
+      "code_hash": "90edc8826b44",
+      "finished_at": "2026-10-21T23:41:33+00:00",
+      "kernel": "02_teacher_gen",
+      "logged": true,
+      "mode": "full",
+      "pulled_to": "runs/2026-10-21/02_teacher_gen-v3",
+      "pushed_at": "2026-10-21T21:45:55+00:00",
+      "resume": true,
+      "status": "complete",
+      "version": 3
+    },
     "pod2post-02-teacher-gen-smoke": {
-      "code_hash": "41fa0e1699f7",
-      "finished_at": "2026-10-21T06:34:25+00:00",
+      "code_hash": "90edc8826b44",
+      "finished_at": "2026-10-21T12:48:17+00:00",
       "kernel": "02_teacher_gen",
       "logged": true,
       "mode": "smoke",
-      "pulled_to": "runs/2026-10-21/02_teacher_gen-smoke-v5",
-      "pushed_at": "2026-10-21T06:20:05+00:00",
+      "pulled_to": "runs/2026-10-21/02_teacher_gen-smoke-v6",
+      "pushed_at": "2026-10-21T12:23:00+00:00",
       "resume": false,
       "status": "complete",
-      "version": 5
+      "version": 6
     },
     "pod2post-03-sft-smoke": {
       "code_hash": "a7b93e16074e",

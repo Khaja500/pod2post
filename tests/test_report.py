@@ -31,4 +31,32 @@ def test_report_combines_runs_and_writes_headline(tmp_path, monkeypatch):
     assert report.main([str(base), str(final)]) == 0
     md = (tmp_path / "reports" / "results.md").read_text()
     assert "| Base (zero-shot) | 50.0%" in md and "| SFT + DPO | 80.0%" in md
-    assert "**+60%** more faithful" in md and "### talkrl:a" in md
+    assert "**60% more** faithful" in md and "### talkrl:a" in md
+
+
+def test_headline_reports_regressions_plainly():
+    from src.eval.report import headline
+    base = {"faithfulness": 0.5, "hallucinated_entities_per_article": 1.0, "seo_score": 0.9, "seconds_per_episode": 30}
+    worse = {**base, "faithfulness": 0.4, "hallucinated_entities_per_article": 1.5}
+    h = headline({"base": base, "sft": worse})
+    assert "**20% less** faithful" in h and "**50% more** invented entities" in h
+
+
+def test_cost_estimate_uses_measured_tokens_and_prices(tmp_path):
+    from src.eval import cost
+    from src.data.chunk import write_jsonl
+
+    (tmp_path / "outputs").mkdir()
+    write_jsonl(tmp_path / "outputs" / "sft_dpo.jsonl", [
+        {"episode_id": "e", "title": "T", "notes_text": "n " * 10, "primary_keyword": "kw", "secondary_keywords": []}])
+    cfg = {"checked": "2026-10-21", "comparator": "api/x", "reference_gpu": "gpu",
+           "api_models": {"api/x": {"input": 1.0, "output": 10.0}},
+           "self_hosted_usd_per_hour": {"gpu": 0.36, "free": 0.0}}
+    agg = {"generated_tokens": 2000, "seconds_per_episode": 100}
+    est = cost.estimate(tmp_path, "sft_dpo", agg, {"e": ["chunk text"]}, lambda t: len(t.split()), cfg, 2.5)
+    assert est["completion_tokens_per_episode"] == 2000
+    p = est["prompt_tokens_per_episode"]
+    assert est["api_usd_per_article"]["api/x"] == round((p * 1.0 + 2000 * 10.0) / 1e6, 5)
+    assert est["self_hosted_usd_per_article"] == {"gpu": 0.01, "free": 0.0}
+    assert est["times_cheaper_than_comparator"] == round(est["api_usd_per_article"]["api/x"] / 0.01, 1)
+    assert est["one_time_usd_at_reference_gpu"] == 0.9

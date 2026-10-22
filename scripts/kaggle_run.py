@@ -656,6 +656,12 @@ def build_training_data(teacher_out: Path, full: bool) -> bool:
     return cmd_dataset(ns) == 0 and wait_dataset_ready(dataset)
 
 
+def cmd_build_data(args) -> int:
+    """Run the between-02-and-03 local steps on the latest pulled teacher output (no new generation)."""
+    sys.path.insert(0, str(REPO))
+    return 0 if build_training_data(pulled_dir("02_teacher_gen", args.full), args.full) else 1
+
+
 def cmd_pipeline(args) -> int:
     """The whole project: 01 -> 05 with the local steps in between (spec §7.3, plan.md)."""
     sys.path.insert(0, str(REPO))
@@ -772,6 +778,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--interval", type=parse_duration, default=60)
     p.set_defaults(fn=cmd_pipeline)
     sub.add_parser("quota", help="GPU hours used (local log + Kaggle counter)").set_defaults(fn=cmd_quota)
+    p = sub.add_parser("build-data", help="filter + build SFT/DPO data + upload, from the latest 02 output")
+    p.add_argument("--full", action="store_true")
+    p.set_defaults(fn=cmd_build_data)
     p = sub.add_parser("dataset", help="create/version a private dataset (data: data/processed, audio: data/raw/audio)")
     p.add_argument("name", choices=sorted(DATASETS), nargs="?", default="data")
     p.add_argument("-m", "--message", help="version notes")

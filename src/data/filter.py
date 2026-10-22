@@ -44,14 +44,73 @@ def ungrounded_numbers(output: str, source: str) -> list[str]:
                   if n not in have and not (n.isdigit() and int(n) <= SMALL_NUMBER_MAX))
 
 
+ALIASES = [  # spellings of the same entity that literal matching misses
+    {"united states", "u s", "us", "usa", "america", "american", "americans"},
+    {"united kingdom", "u k", "uk", "britain", "great britain", "british"},
+    {"european union", "eu", "europe", "european", "europeans"},
+    {"united nations", "u n", "un"},
+]
+GENERIC_WORDS = {"the", "of", "for", "and", "party", "act", "administration", "service", "department", "agency",
+                 "committee", "company", "corporation", "inc", "council", "national", "federal", "institute",
+                 "association", "office", "house", "university", "group", "foundation", "center", "centre"}
+
+
+def _tokens(text_norm: str) -> list[str]:
+    return [t for t in text_norm.split() if t not in GENERIC_WORDS]
+
+
+def _stem_match(token: str, source_tokens: set[str]) -> bool:
+    """Exact, or same word with a different ending: america/american, republican/republicans."""
+    if token in source_tokens:
+        return True
+    if len(token) < 5:
+        return False
+    return any(len(t) >= 5 and min(len(t), len(token)) - 2 <= len(_common_prefix(t, token)) >= 5
+               for t in source_tokens if t[:4] == token[:4])
+
+
+def _common_prefix(a: str, b: str) -> str:
+    n = 0
+    while n < min(len(a), len(b)) and a[n] == b[n]:
+        n += 1
+    return a[:n]
+
+
+def _acronym_in(acronym: str, source_tokens_seq: list[str]) -> bool:
+    """'aca' matches 'affordable care act' (stop words skipped) anywhere in the source."""
+    words = [t for t in source_tokens_seq if t not in {"of", "for", "and", "the", "on", "in"}]
+    k = len(acronym)
+    return any("".join(w[0] for w in words[i:i + k]) == acronym for i in range(len(words) - k + 1))
+
+
 def grounded_entity(entity: str, source_norm: str) -> bool:
-    e = norm(entity)
-    if e.strip() in ENTITY_ALLOW or e in source_norm:
+    """Is this entity in the source? Literal match first, then the normal ways the same name varies:
+    aliases, demonyms and plurals, acronyms (either direction), and full names whose surname or
+    head word is in the source. An entity sharing nothing with the source is still ungrounded."""
+    e = norm(entity).strip()
+    if sum(c.isalpha() for c in e) < 2 or e in ENTITY_ALLOW or f" {e} " in source_norm:
+        return True  # noise like "n't", allow-listed words, or a literal match
+    for group in ALIASES:
+        if e.removeprefix("the ") in group:
+            return any(f" {a} " in source_norm for a in group)
+    seq = source_norm.split()
+    src_tokens = set(seq)
+    tokens = [t for t in e.split() if len(t) >= 3 and t not in GENERIC_WORDS] or [t for t in e.split() if len(t) >= 2]
+    if not tokens:
         return True
-    tokens = [t for t in e.split() if len(t) >= 3]
-    if tokens and all(f" {t} " in source_norm for t in tokens):
+    if len(e.split()) == 1 and e.isalpha() and 2 <= len(e) <= 5 and _acronym_in(e, seq):
+        return True  # ACA <- Affordable Care Act
+    initials = "".join(t[0] for t in _tokens(e))
+    if len(initials) >= 2 and initials in src_tokens:
+        return True  # Affordable Care Act <- ACA
+    matched = [t for t in tokens if _stem_match(t, src_tokens)]
+    if len(matched) == len(tokens):
         return True
-    compact = e.replace(" ", "")  # "#BarackObama" vs "Barack Obama"
+    # Full names / phrases: the head (last) word is in the source and at least half the words are.
+    head_ok = _stem_match(tokens[-1], src_tokens) and len(tokens[-1]) >= 4
+    if head_ok and 2 * len(matched) >= len(tokens):
+        return True
+    compact = e.replace(" ", "")  # "BarackObama" vs "Barack Obama"
     return len(compact) >= 6 and compact in source_norm.replace(" ", "")
 
 
@@ -77,7 +136,8 @@ def checkable_text(article: str, social: dict | None) -> str:
     for v in (social or {}).values():
         social_text += v if isinstance(v, list) else [v]
     text = "\n".join(body + [str(t) for t in social_text])
-    return HASHTAG_RE.sub(lambda m: re.sub(r"(?<=[a-z])(?=[A-Z])", " ", m[1]), text)
+    # Hashtags are tags, not prose; glued lowercase ones ("#trentonduckett") can't even be split.
+    return HASHTAG_RE.sub("", text)
 
 
 def stage_a_problems(chunk: str, notes: dict | None) -> list[str]:
