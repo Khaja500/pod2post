@@ -144,3 +144,7 @@ Re-filtering the same output, with no new generation: Stage A kept 1,331 of 1,86
 - **Self-hosted cost:** measured seconds per episode on one T4 × $0.526/h, the AWS g4dn.xlarge on-demand rate per instances.vantage.sh on 2026-10-21. Kaggle's free tier is shown as $0 but is not used for the ratio.
 
 The one-time training cost is reported separately from the quota log. The caveat: an API model would emit somewhat different token counts. spec.md and plan.md were updated to match the build (2026-10-22).
+
+**D35. 04_dpo samples the SFT model only where a pair can use the result, under a time budget.** The first full run (v1, 2026-10-22) sampled all 315 prompts × 2 and hit the 3 h cap with no output: vLLM serves the base in fp16, so the T4's KV cache holds only ~5 long sequences and throughput is ~30 tok/s. `assemble()` tries an SFT failure first on every 4th prompt only, so `sft_failure_slots()` picks those 75 prompts (same order); `sample_sft` sends them 4 at a time and starts no batch after `sample_time_budget_s` (1 h). DPO training's budget went from 2 h to 1.5 h so install + sampling + training fit 3 h. Prompts the budget leaves unsampled fall back to the next rejected type.
+
+**D36. GPU budget raised from 20 h to 30 h (user, 2026-10-22).** 14.8 h were used by then, 3.0 of them by the failed DPO run, and the full eval alone needs ~8 h.

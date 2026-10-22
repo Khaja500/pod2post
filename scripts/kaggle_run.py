@@ -272,7 +272,7 @@ def quota_totals(now: datetime | None = None) -> tuple[float, float]:
 
 def warn_quota() -> None:
     week, total = quota_totals()
-    print(f"GPU hours logged: {week:.2f} h in the last 7 days, {total:.2f} h project total (budget 20 h)")
+    print(f"GPU hours logged: {week:.2f} h in the last 7 days, {total:.2f} h project total (budget 30 h)")
     if week > WEEKLY_WARN_HOURS:
         print(f"WARNING: more than {WEEKLY_WARN_HOURS:.0f} GPU-hours used this week; check `kaggle quota`.")
 

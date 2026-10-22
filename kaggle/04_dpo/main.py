@@ -32,19 +32,22 @@ sft_adapter = K.find_upstream(next(s for s in UPSTREAM if "-03-sft" in s)) / "ad
 cfg = yaml.safe_load((BUNDLE_DIR / "configs" / "dpo.yaml").read_text())
 base_model = yaml.safe_load((BUNDLE_DIR / "configs" / "eval.yaml").read_text())["base_model"]
 failures_path = K.WORKING / "sft_failures.jsonl"
-subprocess.run([f"{VENV}/bin/python", "-m", "src.train.sample_sft", str(data / "dpo_synthetic.jsonl"),
+
+from src.data.build_dpo import assemble, sft_failure_slots
+from src.data.chunk import read_jsonl, write_jsonl
+
+prompts = list(read_jsonl(data / "dpo_synthetic.jsonl"))
+sample_path = K.WORKING / "sft_sample_prompts.jsonl"
+write_jsonl(sample_path, sft_failure_slots(prompts, cfg["seed"]))  # the only pairs that use an SFT failure
+subprocess.run([f"{VENV}/bin/python", "-m", "src.train.sample_sft", str(sample_path),
                 str(data / "chunks.jsonl"), str(sft_adapter), str(failures_path), base_model,
-                *(["10"] if SMOKE else [])],
+                str(cfg["sample_time_budget_s"]), *(["10"] if SMOKE else [])],
                check=True, cwd=BUNDLE_DIR, env={**os.environ, "PYTHONPATH": str(BUNDLE_DIR), "CUDA_VISIBLE_DEVICES": "0"})
 
 # %%
-from src.data.build_dpo import assemble
-from src.data.chunk import read_jsonl, write_jsonl
-
 K.pin_single_gpu()
 from src.train import dpo
 
-prompts = list(read_jsonl(data / "dpo_synthetic.jsonl"))
 failures = {r["episode_id"]: r["output"] for r in read_jsonl(failures_path)}
 pairs = assemble(prompts, failures, seed=cfg["seed"])
 write_jsonl(K.WORKING / "dpo_pairs.jsonl", pairs)

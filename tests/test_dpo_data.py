@@ -1,7 +1,7 @@
 import json
 import random
 
-from src.data.build_dpo import assemble, inject_hallucination, keyword_stuff
+from src.data.build_dpo import assemble, inject_hallucination, keyword_stuff, sft_failure_slots
 from src.data.filter import ungrounded_numbers
 from src.eval.seo import seo_checks
 
@@ -32,3 +32,12 @@ def test_assemble_mixes_types_round_robin():
     kinds = [p["rejected_type"] for p in pairs]
     assert len(pairs) == 8 and set(kinds) == {"sft_failure", "hallucination", "keyword_stuffed", "generic"}
     assert all(p["chosen"][0]["role"] == "assistant" for p in pairs)
+
+
+def test_sft_failure_slots_are_the_pairs_that_use_sft_failures():
+    prompts = [{"episode_id": f"e{i}", "prompt": [], "chosen": "c",
+                "rejected": {"hallucination": "h", "keyword_stuffed": "k", "generic": "g"}} for i in range(12)]
+    slots = {p["episode_id"] for p in sft_failure_slots(prompts, seed=0, n=12)}
+    pairs = assemble(prompts, {p["episode_id"]: "s" for p in prompts}, seed=0, n=12)
+    assert len(slots) == 3
+    assert slots == {p["episode_id"] for p in pairs if p["rejected_type"] == "sft_failure"}

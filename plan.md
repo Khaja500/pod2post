@@ -4,7 +4,7 @@
 
 Legend: 🧑 = you do it · 🤖 = Claude Code does it · 💻 = run Claude Code locally · ☁️ = run Claude Code on the web (claude.ai/code)
 
-Total Kaggle GPU budget: ≤ 20 GPU-hours.
+Total Kaggle GPU budget: ≤ 30 GPU-hours (raised from 20 on 2026-10-22, D36).
 
 > **Revised 2026-10-22.** The steps below run automatically now, with one command per mode (`pipeline` / `pipeline --full`). The per-phase prompts are kept for reference, and each step is marked with its status. Decisions are logged in `docs/DECISIONS.md`.
 
@@ -138,10 +138,10 @@ Note: environment variables are visible to anyone who can edit that environment.
 
 | Work | Planned GPU-hours | Measured so far |
 |---|---|---|
-| Smoke tests, transcription | ~1.5 | 2.1 (all smoke runs: 1.9; full transcription: 0.1) |
-| Teacher gen (option 1), baseline, SFT | ~4–10 | teacher 6.1 (full, incl. 2 automatic resumes) |
-| DPO, final eval, judge | ~4 | — |
-| **Total** | **~10–16** | **8.3 so far**; ~7–9 more estimated |
+| Smoke tests, transcription | ~1.5 | 2.9 (all smoke runs: 2.8; full transcription: 0.1) |
+| Teacher gen (option 1), baseline, SFT | ~4–10 | teacher 6.1 (full, incl. 2 automatic resumes); SFT 2.8 (full, 1 resume) |
+| DPO, final eval, judge | ~4 | DPO full v1: 3.0, no output (hit the 3 h cap while sampling, D35) |
+| **Total** | **~10–16** | **14.8 so far**; ~11 more estimated (DPO ~2, full eval ~8, judge) |
 
 Check `python3 scripts/kaggle_run.py quota` (or the Kaggle settings page) before starting a big run.
 

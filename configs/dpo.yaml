@@ -10,7 +10,8 @@ per_device_train_batch_size: 1
 gradient_accumulation_steps: 8
 save_steps: 25
 seed: 42
-time_budget_s: 7200          # 2 h of training; SFT sampling + vLLM install run first (Kaggle limit 3 h)
+sample_time_budget_s: 3600   # SFT sampling (~75 prompts x 2 at ~30 tok/s); no new batch after 1 h
+time_budget_s: 5400          # 1.5 h of training; vLLM install + sampling run first (Kaggle limit 3 h)
 
 smoke:
   num_examples: 10

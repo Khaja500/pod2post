@@ -89,13 +89,22 @@ def keyword_stuff(article: str, social: dict, kw: str, rng: random.Random):
     return stuffed, social
 
 
-def assemble(prompts: list[dict], sft_failures: dict[str, str], seed: int, n: int = N_PROMPTS) -> list[dict]:
-    """Pick one rejected answer per prompt, round-robin over the four types where available."""
+def _pair_order(prompts: list[dict], seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     prompts = sorted(prompts, key=lambda p: p["episode_id"])[:n]
     rng.shuffle(prompts)
+    return prompts
+
+
+def sft_failure_slots(prompts: list[dict], seed: int, n: int = N_PROMPTS) -> list[dict]:
+    """The prompts assemble() tries an SFT failure on first (every 4th) - the only ones worth sampling."""
+    return [p for k, p in enumerate(_pair_order(prompts, seed, n)) if k % 4 == 0]
+
+
+def assemble(prompts: list[dict], sft_failures: dict[str, str], seed: int, n: int = N_PROMPTS) -> list[dict]:
+    """Pick one rejected answer per prompt, round-robin over the four types where available."""
     pairs = []
-    for k, p in enumerate(prompts):
+    for k, p in enumerate(_pair_order(prompts, seed, n)):
         options = {**p["rejected"], **({"sft_failure": sft_failures[p["episode_id"]]} if p["episode_id"] in sft_failures else {})}
         order = TYPES[k % 4:] + TYPES[:k % 4]
         kind = next((t for t in order if t in options), None)

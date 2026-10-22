@@ -42,7 +42,7 @@ The core of the project is **post-training a small open model (~3–4B parameter
 | Resource | Limit | Design consequence |
 |---|---|---|
 | GPU | `NvidiaTeslaT4` = a 2× T4 machine (16 GB each); P100 is no longer offered | Training/eval use **one T4** (`CUDA_VISIBLE_DEVICES=0` in code); the teacher and judge use both (tensor parallel). 4-bit QLoRA; **fp16, not bf16** (T4 = sm_75, verified); no FlashAttention-2 |
-| Weekly GPU quota | 30 h/week (`kaggle quota`; resets Saturdays 00:00 UTC) | Total project budget ≤ 20 GPU-hours; leave headroom |
+| Weekly GPU quota | 30 h/week (`kaggle quota`; resets Saturdays 00:00 UTC) | Total project budget ≤ 30 GPU-hours (raised from 20 on 2026-10-22); leave headroom |
 | Session length | 12 h max; we cap every run at **3 h** (`kaggle kernels push -t`) | Long jobs stop themselves at a time budget (teacher 2 h 15 m, SFT 2 h 30 m, DPO 2 h), save, and are **resumed automatically** |
 | Disk | `/kaggle/working` output ~20 GB | Save only LoRA adapters, never merged weights. Caches (HF, Unsloth) go to `/tmp` |
 | Secrets | Kernels pushed from the CLI get no Kaggle Secrets | Kernels need **no secrets**: ungated models only, no API keys on Kaggle |
@@ -304,7 +304,7 @@ pod2post/
 | 7. Eval + report | Full table, examples, cost/latency, judge | `reports/results.md` complete | ~2 h | ⏳ |
 | 8. Demo | Gradio app | Paste transcript or upload short audio → article + social | 0 h | ✅ Built (`app/gradio_app.py`); needs the trained adapter |
 
-GPU used so far: 8.3 h of the 20 h budget. The remaining ~7–9 h estimate covers SFT, DPO, eval, judge and their smoke runs.
+GPU used so far: 14.8 h of the 30 h budget. The remaining ~11 h estimate covers DPO (~2 h), the full eval (~8 h: 50 episodes × 3 systems at ~200 s each) and the judge.
 
 ---
 

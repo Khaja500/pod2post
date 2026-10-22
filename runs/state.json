@@ -145,26 +145,53 @@
       "status": "complete",
       "version": 6
     },
+    "pod2post-03-sft": {
+      "code_hash": "113424619a2d",
+      "finished_at": "2026-10-22T06:30:40+00:00",
+      "kernel": "03_sft",
+      "logged": true,
+      "mode": "full",
+      "pulled_to": "runs/2026-10-22/03_sft-v2",
+      "pushed_at": "2026-10-22T06:15:15+00:00",
+      "resume": true,
+      "status": "complete",
+      "version": 2
+    },
     "pod2post-03-sft-smoke": {
       "code_hash": "113424619a2d",
+      "finished_at": "2026-10-22T03:36:40+00:00",
       "kernel": "03_sft",
-      "logged": false,
+      "logged": true,
       "mode": "smoke",
+      "pulled_to": "runs/2026-10-22/03_sft-smoke-v4",
       "pushed_at": "2026-10-22T03:31:33+00:00",
       "resume": false,
-      "status": "queued",
+      "status": "complete",
       "version": 4
     },
+    "pod2post-04-dpo": {
+      "code_hash": "3604b9b2ae76",
+      "finished_at": "2026-10-22T12:15:39+00:00",
+      "kernel": "04_dpo",
+      "logged": true,
+      "mode": "full",
+      "pulled_to": "runs/2026-10-22/04_dpo-v1",
+      "pushed_at": "2026-10-22T09:14:40+00:00",
+      "resume": false,
+      "status": "cancel_acknowledged",
+      "version": 1
+    },
     "pod2post-04-dpo-smoke": {
-      "code_hash": "e0b56b0bbeb4",
-      "finished_at": "2026-10-21T08:36:43+00:00",
+      "code_hash": "6046f8485438",
+      "finished_at": "2026-10-22T14:17:37+00:00",
       "kernel": "04_dpo",
       "logged": true,
       "mode": "smoke",
-      "pushed_at": "2026-10-21T06:44:48+00:00",
+      "pulled_to": "runs/2026-10-22/04_dpo-smoke-v5",
+      "pushed_at": "2026-10-22T13:49:48+00:00",
       "resume": false,
       "status": "complete",
-      "version": 3
+      "version": 5
     },
     "pod2post-05-eval-smoke": {
       "code_hash": "c7b6ba470248",
