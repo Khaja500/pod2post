@@ -136,3 +136,11 @@ Re-filtering the same output, with no new generation: Stage A kept 1,331 of 1,86
 **D32. Kernels that launch `src` modules as subprocesses include them in their code hash.** `04_dpo` runs `-m src.train.sample_sft`, which the import scan missed.
 
 **D33. Phase 2 results.** Six episodes (about 6 h of audio) were transcribed at about 60× real time (real-time factor 0.017). Raw WER against Changelog #661's human transcript is 21.1%. Of that, 16.9 points are insertions: Whisper keeps the fillers and false starts the edited reference removes. Substitutions plus deletions come to 4.1%.
+
+**D34. "Z× cheaper than an API model" is a free estimate, at the user's request.** No API is called. `src/eval/cost.py` computes:
+- **Prompt tokens:** rebuilt exactly from the test transcripts and each system's own merged notes.
+- **Completion tokens:** as measured on Kaggle.
+- **API cost:** tokens × published per-token prices (OpenRouter's public model list, checked 2026-10-21, kept in `configs/costs.yaml`).
+- **Self-hosted cost:** measured seconds per episode on one T4 × $0.526/h, the AWS g4dn.xlarge on-demand rate per instances.vantage.sh on 2026-10-21. Kaggle's free tier is shown as $0 but is not used for the ratio.
+
+The one-time training cost is reported separately from the quota log. The caveat: an API model would emit somewhat different token counts. spec.md and plan.md were updated to match the build (2026-10-22).

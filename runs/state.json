@@ -17,15 +17,17 @@
         "uploaded_at": "2026-10-20T12:16:44+00:00"
       },
       "data": {
-        "content_hash": "d53d9f005063",
+        "content_hash": "692d47c09439",
         "files": [
-          "episodes.jsonl",
           "chunks.jsonl",
+          "dpo_synthetic.jsonl",
+          "episodes.jsonl",
+          "sft.jsonl",
           "test_ids.sha256"
         ],
         "id": "khajaaflal/pod2post-data",
         "private": true,
-        "uploaded_at": "2026-10-20T11:54:43+00:00"
+        "uploaded_at": "2026-10-22T03:31:25+00:00"
       },
       "data-smoke": {
         "content_hash": "7b1eaf4cc088",
@@ -144,16 +146,14 @@
       "version": 6
     },
     "pod2post-03-sft-smoke": {
-      "code_hash": "a7b93e16074e",
-      "finished_at": "2026-10-21T06:40:31+00:00",
+      "code_hash": "113424619a2d",
       "kernel": "03_sft",
-      "logged": true,
+      "logged": false,
       "mode": "smoke",
-      "pulled_to": "runs/2026-10-21/03_sft-smoke-v3",
-      "pushed_at": "2026-10-21T06:35:20+00:00",
+      "pushed_at": "2026-10-22T03:31:33+00:00",
       "resume": false,
-      "status": "complete",
-      "version": 3
+      "status": "queued",
+      "version": 4
     },
     "pod2post-04-dpo-smoke": {
       "code_hash": "e0b56b0bbeb4",
