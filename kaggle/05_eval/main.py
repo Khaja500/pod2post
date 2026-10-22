@@ -2,6 +2,8 @@
 # # pod2post · 05_eval — every system on the 50 held-out episodes
 # Base model zero-shot, plus SFT / SFT+DPO when their kernels are attached as inputs.
 # Generation on one T4 (vLLM, fp16 base + LoRA), NLI faithfulness scoring on the other.
+# Full: ~13 GPU-hours, so it stops starting new episode batches at 1h50m and
+# `kaggle_run.py push 05_eval --full --resume` continues (the pipeline resumes automatically).
 
 # %%
 import json
@@ -26,7 +28,8 @@ for slug in UPSTREAM:
     name = "sft" if "-03-sft" in slug else "sft_dpo" if "-04-dpo" in slug else None
     if name:
         systems[name] = str(K.find_upstream(slug) / "adapter")
-summary = E.run(K.find_upstream(DATA), K.WORKING, cfg, systems, smoke=bool(SMOKE))
+resume_dir = K.find_upstream(SLUG) if RESUME else None
+summary = E.run(K.find_upstream(DATA), K.WORKING, cfg, systems, smoke=bool(SMOKE), resume_dir=resume_dir)
 print(json.dumps(summary, indent=2))
 
 # %%

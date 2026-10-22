@@ -141,7 +141,7 @@ Note: environment variables are visible to anyone who can edit that environment.
 | Smoke tests, transcription | ~1.5 | 2.9 (all smoke runs: 2.8; full transcription: 0.1) |
 | Teacher gen (option 1), baseline, SFT | ~4–10 | teacher 6.1 (full, incl. 2 automatic resumes); SFT 2.8 (full, 1 resume) |
 | DPO, final eval, judge | ~4 | DPO full v1: 3.0, no output (hit the 3 h cap while sampling, D35) |
-| **Total** | **~10–16** | **14.8 so far**; ~11 more estimated (DPO ~2, full eval ~8, judge) |
+| **Total** | **~10–16** | **14.8 so far**; ~16 more estimated (DPO ~2, full eval ~14 over ~6 resumed runs, judge; D37) |
 
 Check `python3 scripts/kaggle_run.py quota` (or the Kaggle settings page) before starting a big run.
 

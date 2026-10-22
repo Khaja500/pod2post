@@ -170,16 +170,14 @@
       "version": 4
     },
     "pod2post-04-dpo": {
-      "code_hash": "3604b9b2ae76",
-      "finished_at": "2026-10-22T12:15:39+00:00",
+      "code_hash": "6046f8485438",
       "kernel": "04_dpo",
-      "logged": true,
+      "logged": false,
       "mode": "full",
-      "pulled_to": "runs/2026-10-22/04_dpo-v1",
-      "pushed_at": "2026-10-22T09:14:40+00:00",
+      "pushed_at": "2026-10-22T14:21:32+00:00",
       "resume": false,
-      "status": "cancel_acknowledged",
-      "version": 1
+      "status": "queued",
+      "version": 2
     },
     "pod2post-04-dpo-smoke": {
       "code_hash": "6046f8485438",

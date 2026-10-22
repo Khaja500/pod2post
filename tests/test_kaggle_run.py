@@ -209,3 +209,10 @@ def test_dataset_status_survives_a_network_blip(fake, monkeypatch):
 
     monkeypatch.setattr(kr, "run_cli", flaky)
     assert kr.dataset_status(f"{USER}/pod2post-audio") == "ready" and calls["n"] == 2
+
+
+def test_eval_needs_resume_reads_results(tmp_path):
+    (tmp_path / "results.json").write_text(json.dumps({"systems": {}, "stopped_by_time_budget": True}))
+    assert kr.needs_resume("05_eval", tmp_path)
+    (tmp_path / "results.json").write_text(json.dumps({"systems": {}, "stopped_by_time_budget": False}))
+    assert not kr.needs_resume("05_eval", tmp_path)

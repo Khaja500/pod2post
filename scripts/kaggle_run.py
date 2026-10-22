@@ -53,6 +53,7 @@ DATASETS = {  # name -> (Kaggle slug, local folder, files; None = every file in 
 BASE_DATA_FILES = ["episodes.jsonl", "chunks.jsonl", "test_ids.sha256"]
 LOCAL_PY = str(REPO / ".venv" / "bin" / "python") if (REPO / ".venv" / "bin" / "python").is_file() else sys.executable
 MAX_RESUMES = 3
+RESUME_LIMITS = {"05_eval": 8}  # the full eval is ~13 GPU-hours: ~6 runs of 3 h
 PULL_RETRIES = 4
 ABSENT_RETRIES = 5  # the status API sometimes answers "denied" for a kernel that exists
 ACTIVE = {"queued", "running", "new_script", "cancel_requested"}
@@ -564,6 +565,9 @@ def needs_resume(kernel: str, out: Path) -> bool:
     if kernel == "02_teacher_gen":
         stats = out / "teacher" / "teacher_stats.json"
         return stats.is_file() and bool(json.loads(stats.read_text()).get("stopped_early"))
+    if kernel == "05_eval":
+        results = out / "results.json"
+        return results.is_file() and bool(json.loads(results.read_text()).get("stopped_by_time_budget"))
     key = {"03_sft": "sft", "04_dpo": "dpo"}.get(kernel)
     manifest = out / "run_manifest.json"
     return bool(key and manifest.is_file() and json.loads(manifest.read_text()).get(key, {}).get("stopped_by_time_budget"))
@@ -584,8 +588,8 @@ def run_stage(kernel: str, args) -> Path | None:
         if run_stage(kernel, smoke) is None:
             return None
         print(f"=== {kernel} (full) ===", flush=True)
-    resume = False
-    for attempt in range(MAX_RESUMES + 1):
+    resume, limit = False, RESUME_LIMITS.get(kernel, MAX_RESUMES)
+    for attempt in range(limit + 1):
         step = argparse.Namespace(kernel=kernel, full=args.full, force=False, resume=resume, run_timeout=None,
                                   timeout=args.timeout, interval=args.interval)
         for fn in (cmd_push, cmd_wait, cmd_pull):
@@ -595,9 +599,9 @@ def run_stage(kernel: str, args) -> Path | None:
         out = pulled_dir(kernel, args.full)
         if not needs_resume(kernel, out):
             return out
-        print(f"{kernel} stopped at its time budget; resuming ({attempt + 1}/{MAX_RESUMES}).", flush=True)
+        print(f"{kernel} stopped at its time budget; resuming ({attempt + 1}/{limit}).", flush=True)
         resume = True
-    print(f"{kernel} is still unfinished after {MAX_RESUMES} resumes.")
+    print(f"{kernel} is still unfinished after {limit} resumes.")
     return None
 
 

@@ -304,7 +304,7 @@ pod2post/
 | 7. Eval + report | Full table, examples, cost/latency, judge | `reports/results.md` complete | ~2 h | ⏳ |
 | 8. Demo | Gradio app | Paste transcript or upload short audio → article + social | 0 h | ✅ Built (`app/gradio_app.py`); needs the trained adapter |
 
-GPU used so far: 14.8 h of the 30 h budget. The remaining ~11 h estimate covers DPO (~2 h), the full eval (~8 h: 50 episodes × 3 systems at ~200 s each) and the judge.
+GPU used so far: 14.8 h of the 30 h budget. The remaining ~16 h estimate covers DPO (~2 h), the full eval (~14 h over ~6 resumed 3 h runs, D37) and the judge.
 
 ---
 

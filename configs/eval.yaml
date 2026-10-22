@@ -1,6 +1,9 @@
 # Evaluation (spec §6), kernel 05_eval.
 test_set_size: 50
 systems: [base, sft, sft_dpo]   # base always; sft / sft_dpo when their adapters are attached
+episodes_per_batch: 4         # outputs are saved after every batch, so a resumed run loses at most one
+time_budget_s: 6600           # no new batch after 1h50m: install + a last batch (<= 45 min) + scoring fit 3 h
+smoke_time_budget_s: 2400     # smoke (2 episodes) always finishes in one run
 base_model: Qwen/Qwen3-4B-Instruct-2507   # fp16 in vLLM; adapters were trained on its Unsloth 4-bit build
 
 generation:

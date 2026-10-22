@@ -70,3 +70,59 @@ def test_pipeline_runs_map_then_reduce():
     assert gen.calls == 2 and [r["episode_id"] for r in res] == ["e1", "e2"]
     assert res[0]["primary_keyword"] == "drone delivery" and res[0]["article"].startswith("# Drone")
     assert res[0]["timing"]["episodes"] == 2 and res[1]["stage_a_invalid"] == 0
+
+
+class Clock:
+    """Stands in for the time module in src.eval.kernel; each fake LLM call takes 1,000 s."""
+    t = 0.0
+
+    def time(self):
+        return self.t
+
+
+class TimedGen(FakeGen):
+    def __init__(self, clock):
+        super().__init__()
+        self.clock, self.generated_tokens, self.generate_seconds, self.adapters = clock, 0, 0.0, []
+
+    def use_adapter(self, name, path=None):
+        self.adapters.append(name)
+
+    def chat(self, convs, max_tokens, temperature=None):
+        self.clock.t += 1000
+        self.generated_tokens += 10 * len(convs)
+        self.generate_seconds += 1.0
+        return super().chat(convs, max_tokens, temperature)
+
+
+def test_eval_stops_at_budget_and_resumes(tmp_path, monkeypatch):
+    from src.data.chunk import write_jsonl
+    from src.data.testset import HASH_FILE, write_hashes
+    from src.eval import kernel
+
+    ids = ["e1", "e2", "e3"]
+    data = tmp_path / "data"
+    data.mkdir()
+    write_jsonl(data / "episodes.jsonl", [{"episode_id": e, "title": f"T {e}", "split": "test"} for e in ids])
+    write_jsonl(data / "chunks.jsonl", [{"episode_id": e, "split": "test", "text": CHUNKS[0]} for e in ids])
+    write_hashes(ids, data / HASH_FILE)
+    cfg = {"time_budget_s": 2500, "smoke_time_budget_s": 2500, "episodes_per_batch": 2,
+           "generation": {"max_tokens": {"stage_a": 10, "stage_b": 10}, "notes_budget_tokens": 1800}}
+    systems = {"base": None, "sft": "/adapters/sft"}
+    clock = Clock()
+    monkeypatch.setattr(kernel, "time", clock)
+
+    # Run 1: base takes two batches (2 LLM calls each = 4,000 s), then the budget stops sft before it starts.
+    first = kernel.run(data, tmp_path / "run1", cfg, systems, smoke=False, gen=TimedGen(clock), scorer=WordOverlapNLI())
+    assert first["stopped_by_time_budget"] and first["pending"] == ["sft"] and list(first["systems"]) == ["base"]
+    assert first["systems"]["base"]["episodes"] == 3 and first["systems"]["base"]["generated_tokens"] > 0
+
+    # Run 2 resumes from run 1's outputs: base is carried over untouched, only sft is generated.
+    clock.t = 0.0
+    gen = TimedGen(clock)
+    second = kernel.run(data, tmp_path / "run2", cfg, systems, smoke=False, resume_dir=tmp_path / "run1",
+                        gen=gen, scorer=WordOverlapNLI())
+    assert not second["stopped_by_time_budget"] and second["pending"] == []
+    assert set(gen.adapters) == {"sft"} and second["systems"]["base"] == first["systems"]["base"]
+    assert len((tmp_path / "run2" / "outputs" / "sft.jsonl").read_text().splitlines()) == 3
+    assert json.loads((tmp_path / "run2" / "results.json").read_text())["systems"].keys() == {"base", "sft"}
