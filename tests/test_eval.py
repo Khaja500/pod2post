@@ -148,14 +148,58 @@ def test_eval_system_reuses_notes_of_its_source(tmp_path, monkeypatch):
     write_jsonl(data / "episodes.jsonl", [{"episode_id": e, "title": f"T {e}", "split": "test"} for e in ids])
     write_jsonl(data / "chunks.jsonl", [{"episode_id": e, "split": "test", "text": CHUNKS[0]} for e in ids])
     write_hashes(ids, data / HASH_FILE)
-    cfg = {"time_budget_s": 1e9, "smoke_time_budget_s": 1e9, "episodes_per_batch": 2, "notes_from": {"sft_dpo": "sft"},
+    cfg = {"time_budget_s": 1e9, "smoke_time_budget_s": 1e9, "episodes_per_batch": 2,
+           "notes_from": {"sft_dpo": "sft", "sft_base_notes": "base"},
            "generation": {"max_tokens": {"stage_a": 10, "stage_b": 10}, "notes_budget_tokens": 1800,
                           "tensor_parallel_size": 2}}
     gen = TimedGen(Clock())
-    res = kernel.run(data, tmp_path / "out", cfg, {"sft": "/a/sft", "sft_dpo": "/a/dpo"}, smoke=False,
-                     gen=gen, scorer=WordOverlapNLI())
-    assert gen.calls == 3  # sft: Stage A + Stage B; sft_dpo: Stage B only
+    systems = {"base": None, "sft": "/a/sft", "sft_dpo": "/a/dpo", "sft_base_notes": "/a/sft"}
+    res = kernel.run(data, tmp_path / "out", cfg, systems, smoke=False, gen=gen, scorer=WordOverlapNLI())
+    assert gen.calls == 6  # base, sft: Stage A + Stage B; sft_dpo, sft_base_notes: Stage B only
     assert res["systems"]["sft_dpo"]["notes_from"] == "sft" and res["systems"]["sft"]["notes_from"] is None
+    assert res["systems"]["sft_base_notes"]["notes_from"] == "base"
     assert res["systems"]["sft_dpo"]["gpus"] == 2
     read = lambda n: [json.loads(l) for l in (tmp_path / "out" / "outputs" / f"{n}.jsonl").read_text().splitlines()]
     assert [r["notes_text"] for r in read("sft_dpo")] == [r["notes_text"] for r in read("sft")]
+    assert [r["notes_text"] for r in read("sft_base_notes")] == [r["notes_text"] for r in read("base")]
+
+
+def test_resume_regenerates_a_retrained_adapter(tmp_path, monkeypatch):
+    from src.data.chunk import write_jsonl
+    from src.data.testset import HASH_FILE, write_hashes
+    from src.eval import kernel
+
+    ids = ["e1", "e2"]
+    data = tmp_path / "data"
+    data.mkdir()
+    write_jsonl(data / "episodes.jsonl", [{"episode_id": e, "title": f"T {e}", "split": "test"} for e in ids])
+    write_jsonl(data / "chunks.jsonl", [{"episode_id": e, "split": "test", "text": CHUNKS[0]} for e in ids])
+    write_hashes(ids, data / HASH_FILE)
+    cfg = {"time_budget_s": 1e9, "smoke_time_budget_s": 1e9, "episodes_per_batch": 2, "notes_from": {"sft_dpo": "sft"},
+           "generation": {"max_tokens": {"stage_a": 10, "stage_b": 10}, "notes_budget_tokens": 1800}}
+    systems = {}
+    for name, started in (("sft", "2026-10-22T09:00:00+00:00"), ("sft_dpo", "2026-10-22T14:00:00+00:00")):
+        (tmp_path / name / "adapter").mkdir(parents=True)
+        (tmp_path / name / "run_manifest.json").write_text(json.dumps({"started_at": started}))
+        systems[name] = str(tmp_path / name / "adapter")
+    monkeypatch.setattr(kernel, "time", Clock())
+    kernel.run(data, tmp_path / "run1", cfg, systems, smoke=False, gen=TimedGen(Clock()), scorer=WordOverlapNLI())
+    stats = tmp_path / "run1" / "outputs" / "sft_dpo.stats.json"
+    assert json.loads(stats.read_text())["adapter_run"] == "2026-10-22T14:00:00+00:00"
+
+    # DPO is retrained: only sft_dpo is regenerated (Stage B from sft's notes); sft is carried over.
+    (tmp_path / "sft_dpo" / "run_manifest.json").write_text(json.dumps({"started_at": "2026-10-23T09:00:00+00:00"}))
+    gen = TimedGen(Clock())
+    res = kernel.run(data, tmp_path / "run2", cfg, systems, smoke=False, resume_dir=tmp_path / "run1",
+                     gen=gen, scorer=WordOverlapNLI())
+    assert gen.adapters == ["sft_dpo"] and gen.calls == 1 and res["pending"] == []
+    assert res["systems"]["sft_dpo"]["adapter_run"] == "2026-10-23T09:00:00+00:00"
+
+    # Stats from before adapter_run existed: stale only if the adapter is newer than the run resumed from.
+    for name in ("sft", "sft_dpo"):
+        p = tmp_path / "run2" / "outputs" / f"{name}.stats.json"
+        p.write_text(json.dumps({k: v for k, v in json.loads(p.read_text()).items() if k != "adapter_run"}))
+    (tmp_path / "run2" / "run_manifest.json").write_text(json.dumps({"started_at": "2026-10-23T10:00:00+00:00"}))
+    assert kernel.stale_systems(tmp_path / "run2", systems, cfg["notes_from"], tmp_path / "run2") == set()
+    (tmp_path / "sft" / "run_manifest.json").write_text(json.dumps({"started_at": "2026-10-23T11:00:00+00:00"}))
+    assert kernel.stale_systems(tmp_path / "run2", systems, cfg["notes_from"], tmp_path / "run2") == {"sft", "sft_dpo"}

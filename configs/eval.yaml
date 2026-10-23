@@ -1,7 +1,9 @@
 # Evaluation (spec §6), kernel 05_eval.
 test_set_size: 50
-systems: [base, sft, sft_dpo]   # base always; sft / sft_dpo when their adapters are attached
-notes_from: {sft_dpo: sft}    # SFT + DPO writes from SFT's Stage A notes: DPO trained on Stage B only (D38)
+systems: [base, sft, sft_dpo, sft_base_notes]   # base always; the others when their adapters are attached
+notes_from: {sft_dpo: sft, sft_base_notes: base}
+# SFT + DPO writes from SFT's Stage A notes: DPO trained on Stage B only (D38).
+# sft_base_notes is the SFT adapter writing from base's notes: is SFT's faithfulness loss in Stage A or B? (D41)
 episodes_per_batch: 8         # outputs are saved after every batch, so a resumed run loses at most one
 time_budget_s: 7200           # no new batch after 2 h: install + a last batch (<= 25 min on 2 T4s) + scoring fit 3 h
 smoke_time_budget_s: 2400     # smoke (2 episodes) always finishes in one run

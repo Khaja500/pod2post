@@ -122,13 +122,14 @@ Drop a generated example if any of:
 The drop rate per rule is logged to `filter_report.json`.
 
 ### 4.4 Preference data for DPO (`src/data/build_dpo.py`, kernel `04_dpo`)
-For 300 Stage B inputs, create (chosen, rejected) pairs:
-- **chosen** = filtered teacher output (canonical format)
-- **rejected** = one of the following, mixed round-robin at ~25% each:
-  - (a) an SFT-model output that fails the grounding or format checks. It is sampled in `04_dpo` with vLLM, in its own venv.
+For the 300 Stage B training inputs, create (chosen, rejected) pairs (D39):
+- **(a) on-policy, the main signal.** `04_dpo` samples the SFT model twice per prompt (vLLM on both T4s, in its own venv, until a 50-minute budget), then scores every sample and the teacher's answer with the eval's own scorer (NLI faithfulness, invented entities/numbers, SEO, format). **rejected** = the least faithful sample; **chosen** = the most faithful answer that passes every check, from the teacher or the other sample. A pair is kept only if chosen is ≥ 8 points more faithful, scores no lower on SEO, and is at least 85% as long (DPO otherwise learns "shorter is better").
+- **(b)–(d) synthetic, a third of the pairs**, round-robin on the prompts without an (a) pair. chosen = filtered teacher output; rejected =
   - (b) teacher output with an injected hallucination: a fake statistic plus an invented claim attributed to a real speaker.
   - (c) a keyword-stuffed version, with density well above 2.5%.
   - (d) a generic, vague rewrite written by the teacher.
+
+The first DPO run (D35) used (a) = "an SFT output that fails the grounding or format checks", mixed ~25% each with (b)–(d); 265 of its 285 pairs were synthetic and it changed no metric (D39).
 
 The DPO reference model is the **SFT adapter**, kept as a frozen copy, not the base model.
 
@@ -173,12 +174,16 @@ time_budget_s: 9000             # save + stop at 2h30m; resumed automatically
 ```yaml
 start_from: sft_adapter         # TRL keeps a frozen copy as the reference
 beta: 0.1
-learning_rate: 5e-6
+learning_rate: 1e-5             # 5e-6 in the first run, which barely moved the adapter (D39)
 num_train_epochs: 1
 max_length: 4096                # max_prompt_length was removed in TRL 1.x; prompts fit by construction
 gradient_accumulation_steps: 8
 save_steps: 25
-time_budget_s: 7200
+sample_time_budget_s: 3000      # SFT sampling on both T4s
+faith_margin: 0.08              # (a) pairs: chosen >= 8 points more faithful
+synthetic_share: 0.33           # (b)-(d) pairs as a third of the total
+time_budget_s: 5400             # at most 1.5 h of training,
+kernel_budget_s: 9900           # and never past 2h45m from kernel start
 ```
 
 ### 5.5 Stretch (only if quota remains)
@@ -292,19 +297,19 @@ pod2post/
 
 ## 9. Phases & acceptance criteria
 
-| Phase | Deliverable | Done when | GPU budget | Status (2026-10-22) |
+| Phase | Deliverable | Done when | GPU budget | Status (2026-10-23) |
 |---|---|---|---|---|
 | 0. Setup | Repo, .gitignore, Kaggle CLI verified, `kaggle_run.py`, smoke kernel | `pipeline` works end-to-end in SMOKE mode | < 0.5 h | ✅ Done. Smoke pipeline green 01 → 05 |
 | 1. Data | Downloads, held-out test split, chunking, SOURCES.md | 50 test episodes frozen; chunker unit tests pass | 0 h | ✅ Done |
 | 2. Transcribe | Whisper on 5 CC audio episodes | Transcripts saved; WER spot-checked on 1 episode | ~1 h | ✅ Done. 0.2 h. WER 21.1% raw, 4.1% substitutions + deletions (D33) |
 | 3. Teacher gen | 600 Stage A + 400 Stage B examples, filtered | Drop-rate report; ≥ 70% of target survives | 0–6 h | ✅ Done. 7.1 h incl. smoke. Kept 1,331 A / 315 B (D31) |
-| 4. Baseline eval | Base model zero-shot on the test set | `results.md` has the baseline row | ~1 h | ⏳ Runs inside `05_eval`, together with all systems |
-| 5. SFT | LoRA adapter | Beats baseline on faithfulness and SEO score | ~2–3 h | ✅ Trained: 2 epochs, val loss 0.370 → 0.345, 2.8 h (1 resume). Eval pending |
-| 6. DPO | DPO adapter | Fewer hallucinated entities than SFT, no SEO regression | ~2 h | ✅ Trained: 36/36 steps, 285 pairs, val reward accuracy 100%, margin 3.06; 5.7 h incl. a run lost to the 3 h cap (D35). Eval pending |
-| 7. Eval + report | Full table, examples, cost/latency, judge | `reports/results.md` complete | ~6 h | ⏳ Next: resumable eval on both T4s (D37, D38) |
+| 4. Baseline eval | Base model zero-shot on the test set | `results.md` has the baseline row | ~1 h | ✅ Done in `05_eval` (2026-10-23): faithfulness 43.5%, SEO 80.5%, Flesch 48.7 |
+| 5. SFT | LoRA adapter | Beats baseline on faithfulness and SEO score | ~2–3 h | ❌ Trained (2 epochs, val loss 0.370 → 0.345, 2.8 h) but **fails**: SEO 97.8% (base 80.5%), faithfulness 38.6% (base 43.5%; 95% CI of the gap −8.5 to −1.3 points), Flesch 29.7. Fewer articles invent anything (26% vs 44%) |
+| 6. DPO | DPO adapter | Fewer hallucinated entities than SFT, no SEO regression | ~2 h | ❌ **Fails** after 3 runs. Run 1 (285 pairs, 93% synthetic, D35) and run 3 (70 on-policy scored pairs, 3 epochs, D39–D40) are both within noise of SFT: run 3 has 0.42 vs 0.42 invented entities, faithfulness 39.1% vs 38.6% (CI of the gap −2.9 to +3.9), SEO 96.5% vs 97.8%. On MediaSum, SFT is already almost as faithful as the teacher (51.2% vs 53.8%) |
+| 7. Eval + report | Full table, examples, cost/latency, judge | `reports/results.md` complete | ~6 h | ✅ Done (2026-10-23). Full eval 3.6 h + re-evals 1.2 h (D38–D41); judge 1.05 h: base beats SFT 48% / SFT + DPO 52% of episodes, the systems win 12% / 14%. Ablation (D41): with base's notes, SFT's writer is 6.4 points less faithful than base's (CI −10.6 to −2.5), so the loss is in the article style |
 | 8. Demo | Gradio app | Paste transcript or upload short audio → article + social | 0 h | ✅ Built (`app/gradio_app.py`); needs the trained adapter |
 
-GPU used so far: 17.5 h of the 30 h budget. The remaining ~6–7 h estimate covers the eval smoke run (~0.5 h), the full eval (~5–5.5 h over 2–3 resumed runs, D38) and the judge.
+GPU used: 27.9 h of the 30 h budget (Kaggle's counter, 2026-10-23). GPU work is finished; the 2.1 h left cannot pay for new teacher targets and an SFT retrain (~10 h), the likely fix (D41).
 
 ---
 

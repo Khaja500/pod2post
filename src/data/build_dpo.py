@@ -1,9 +1,10 @@
-"""Phase 6: DPO preference pairs (spec §4.4). chosen = filtered teacher output; rejected is one of
-  (a) an SFT-model output that fails the grounding/format checks (sampled on Kaggle in 04_dpo)
-  (b) the teacher output with an injected hallucination: a fake statistic + an invented claim
-  (c) a keyword-stuffed version of the teacher output
-  (d) a generic/vague rewrite of it (made by the teacher in 02_teacher_gen)
-mixed ~25% each over 300 Stage B prompts.
+"""Phase 6: DPO preference pairs (spec §4.4). Four kinds of pair:
+  (a) on-policy (D39): the SFT model's least faithful sample (sampled and scored on Kaggle in
+      04_dpo) vs. the most faithful clean answer among the teacher's and the other samples
+  (b) teacher output vs. the same with an injected hallucination: a fake statistic + an invented claim
+  (c) teacher output vs. a keyword-stuffed version of it
+  (d) teacher output vs. a generic/vague rewrite of it (made by the teacher in 02_teacher_gen)
+(a) wherever the scores give one; (b)-(d) round-robin over the other prompts as a third of the total.
 
   .venv/bin/python -m src.data.build_dpo runs/<date>/02_teacher_gen-v<N>/teacher [out_dir]
 writes data/processed/dpo_synthetic.jsonl with (b), (c), (d) candidates for every prompt.
@@ -27,7 +28,7 @@ from src.eval.seo import DENSITY, format_problems, keyword_count, parse_output, 
 
 REPO = Path(__file__).resolve().parents[2]
 N_PROMPTS = 300
-TYPES = ["sft_failure", "hallucination", "keyword_stuffed", "generic"]
+TYPES = ["sft_less_faithful", "hallucination", "keyword_stuffed", "generic"]
 
 FAKE_ORGS = ["Northbridge Analytics", "the Helios Institute", "Meridian Research Group", "Cobalt Insights",
              "the Larkspur Foundation", "Vantage Metrics"]
@@ -89,29 +90,57 @@ def keyword_stuff(article: str, social: dict, kw: str, rng: random.Random):
     return stuffed, social
 
 
-def _pair_order(prompts: list[dict], seed: int, n: int) -> list[dict]:
+def sampling_order(prompts: list[dict], seed: int, n: int = N_PROMPTS) -> list[dict]:
+    """The order 04_dpo samples the SFT model in (it stops at a time budget) and assemble() uses."""
     rng = random.Random(seed)
     prompts = sorted(prompts, key=lambda p: p["episode_id"])[:n]
     rng.shuffle(prompts)
     return prompts
 
 
-def sft_failure_slots(prompts: list[dict], seed: int, n: int = N_PROMPTS) -> list[dict]:
-    """The prompts assemble() tries an SFT failure on first (every 4th) - the only ones worth sampling."""
-    return [p for k, p in enumerate(_pair_order(prompts, seed, n)) if k % 4 == 0]
+def faithfulness_pair(scored: dict, margin: float) -> tuple[dict, dict] | None:
+    """(a), D39: rejected = the least faithful SFT sample; chosen = the most faithful clean answer
+    (no check fails) among the teacher's and the other samples, kept only if it is at least
+    `margin` more faithful, scores no lower on SEO and is not much shorter (DPO's length bias)."""
+    sft = sorted(scored["sft"], key=lambda c: c["faithfulness"])
+    if not sft:
+        return None
+    rejected = sft[0]
+    clean = [c for c in [scored["teacher"], *sft[1:]] if not c["problems"]]
+    if not clean:
+        return None
+    chosen = max(clean, key=lambda c: c["faithfulness"])
+    if (chosen["faithfulness"] - rejected["faithfulness"] >= margin and chosen["seo_score"] >= rejected["seo_score"]
+            and chosen["words"] >= 0.85 * rejected["words"]):
+        return chosen, rejected
+    return None
 
 
-def assemble(prompts: list[dict], sft_failures: dict[str, str], seed: int, n: int = N_PROMPTS) -> list[dict]:
-    """Pick one rejected answer per prompt, round-robin over the four types where available."""
-    pairs = []
-    for k, p in enumerate(_pair_order(prompts, seed, n)):
-        options = {**p["rejected"], **({"sft_failure": sft_failures[p["episode_id"]]} if p["episode_id"] in sft_failures else {})}
-        order = TYPES[k % 4:] + TYPES[:k % 4]
-        kind = next((t for t in order if t in options), None)
+def assemble(prompts: list[dict], scored: dict[str, dict], seed: int, n: int = N_PROMPTS,
+             margin: float = 0.08, synthetic_share: float = 0.33, min_pairs: int = 0) -> list[dict]:
+    """A faithfulness pair for every scored prompt that has one; then synthetic pairs (b)-(d),
+    round-robin over the other prompts, as `synthetic_share` of the total (or up to min_pairs)."""
+    def pair(p, kind, chosen, rejected):
+        return {"episode_id": p["episode_id"], "rejected_type": kind, "prompt": p["prompt"],
+                "chosen": [{"role": "assistant", "content": chosen}],
+                "rejected": [{"role": "assistant", "content": rejected}]}
+
+    pairs, rest = [], []
+    for p in sampling_order(prompts, seed, n):
+        found = faithfulness_pair(scored[p["episode_id"]], margin) if p["episode_id"] in scored else None
+        if found:
+            chosen, rejected = found
+            pairs.append({**pair(p, TYPES[0], chosen["text"], rejected["text"]),
+                          "faithfulness": [chosen["faithfulness"], rejected["faithfulness"]]})
+        else:
+            rest.append(p)
+    n_synthetic = round(len(pairs) * synthetic_share / (1 - synthetic_share)) if pairs else len(rest)
+    n_synthetic = max(n_synthetic, min_pairs - len(pairs))
+    for k, p in enumerate(rest[:n_synthetic]):
+        order = TYPES[1:][k % 3:] + TYPES[1:][:k % 3]
+        kind = next((t for t in order if t in p["rejected"]), None)
         if kind:
-            pairs.append({"episode_id": p["episode_id"], "rejected_type": kind, "prompt": p["prompt"],
-                          "chosen": [{"role": "assistant", "content": p["chosen"]}],
-                          "rejected": [{"role": "assistant", "content": options[kind]}]})
+            pairs.append(pair(p, kind, p["chosen"], p["rejected"][kind]))
     return pairs
 
 

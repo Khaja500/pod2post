@@ -1,8 +1,8 @@
 # DPO starting point (spec §5.4).
 start_from: sft_adapter
 beta: 0.1
-learning_rate: 5.0e-6
-num_train_epochs: 1
+learning_rate: 2.0e-5        # 5e-6 (D35) and 1e-5 x 1 epoch (D39) moved the adapter <= 0.6% from SFT (D40)
+num_train_epochs: 3          # 70 pairs / 8 per step: 9 steps per epoch
 max_length: 4096
 # max_prompt_length: 2560 -> removed in TRL 1.x (truncation is keep_start on the whole sequence);
 # prompts fit by construction (notes <= 1,800 tokens, docs/DECISIONS.md D23)
@@ -10,11 +10,15 @@ per_device_train_batch_size: 1
 gradient_accumulation_steps: 8
 save_steps: 25
 seed: 42
-sample_time_budget_s: 3600   # SFT sampling (~75 prompts x 2 at ~30 tok/s); no new batch after 1 h
-time_budget_s: 5400          # 1.5 h of training; vLLM install + sampling run first (Kaggle limit 3 h)
+sample_time_budget_s: 3000   # SFT sampling on both T4s, 2 per prompt; no new group of 16 prompts after 50 min
+faith_margin: 0.08           # (a) pairs: chosen at least 8 points more faithful than rejected (~3 of ~40 sentences)
+synthetic_share: 0.33        # (b)-(d) pairs as a third of the total, on the prompts without an (a) pair
+time_budget_s: 5400          # at most 1.5 h of training ...
+kernel_budget_s: 9900        # ... and never past 2h45m from kernel start (Kaggle limit 3 h)
 
 smoke:
   num_examples: 10
+  num_sampled: 4
   max_steps: 5
   save_steps: 5
   time_budget_s: 900

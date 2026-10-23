@@ -14,8 +14,11 @@ from pathlib import Path
 from src.data.chunk import read_jsonl
 
 REPO = Path(__file__).resolve().parents[2]
-ORDER = ["base", "sft", "sft_dpo", "teacher"]
-LABELS = {"base": "Base (zero-shot)", "sft": "SFT", "sft_dpo": "SFT + DPO", "teacher": "Teacher (upper bound)"}
+ORDER = ["base", "sft", "sft_dpo", "sft_base_notes", "teacher"]
+LABELS = {"base": "Base (zero-shot)", "sft": "SFT", "sft_dpo": "SFT + DPO", "sft_base_notes": "SFT on base's notes",
+          "teacher": "Teacher (upper bound)"}
+NOTES_WHY = {"sft_dpo": "DPO trained on Stage B only",
+             "sft_base_notes": "an ablation: does SFT lose faithfulness in its notes or in its articles?"}
 
 
 def pct(x):
@@ -159,8 +162,8 @@ def main(argv: list[str]) -> int:
     lines += ["", f"Generation ran on {gpus} T4{'s (tensor parallel)' if gpus > 1 else ''}; s / episode is wall time."]
     for n in names:
         if (src := systems[n].get("notes_from")) in systems:
-            lines.append(f"{LABELS[n]} writes its articles from {LABELS[src]}'s Stage A notes (DPO trained on "
-                         "Stage B only), so its tokens/s and s / episode cover Stage B only.")
+            lines.append(f"{LABELS[n]} writes its articles from {LABELS[src]}'s Stage A notes ({NOTES_WHY[n]}), "
+                         "so its tokens/s and s / episode cover Stage B only.")
     checks = list(next(iter(systems.values()))["seo_check_pass_rates"])
     lines += cost_lines
     lines += ["", "## SEO checklist pass rates", "", "| Check | " + " | ".join(LABELS[n] for n in names) + " |",
@@ -173,7 +176,8 @@ def main(argv: list[str]) -> int:
         judge = json.loads(judge_path.read_text())
         lines += ["", "## LLM judge (pairwise vs base, teacher model as judge)", "",
                   "| System | Win | Tie | Loss |", "|---|---|---|---|"]
-        lines += [f"| {LABELS[k]} | {pct(v['win'])} | {pct(v['tie'])} | {pct(v['loss'])} |" for k, v in judge.items()]
+        lines += [f"| {LABELS[k]} | {pct(judge[k]['win'])} | {pct(judge[k]['tie'])} | {pct(judge[k]['loss'])} |"
+                  for k in sorted(judge, key=ORDER.index)]
         lines += ["", "Each pair is judged in both A/B orders; a system wins an episode only if it wins one order and "
                   "does not lose the other."]
 

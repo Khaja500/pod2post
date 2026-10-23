@@ -1,7 +1,7 @@
 import json
 import random
 
-from src.data.build_dpo import assemble, inject_hallucination, keyword_stuff, sft_failure_slots
+from src.data.build_dpo import assemble, faithfulness_pair, inject_hallucination, keyword_stuff, sampling_order
 from src.data.filter import ungrounded_numbers
 from src.eval.seo import seo_checks
 
@@ -25,19 +25,44 @@ def test_keyword_stuffing_fails_density():
     assert not seo_checks(article, KW)["checks"]["density_ok"]
 
 
-def test_assemble_mixes_types_round_robin():
-    prompts = [{"episode_id": f"e{i}", "prompt": [], "chosen": "c",
-                "rejected": {"hallucination": "h", "keyword_stuffed": "k", "generic": "g"}} for i in range(8)]
-    pairs = assemble(prompts, {"e0": "s", "e1": "s", "e2": "s", "e3": "s", "e4": "s", "e5": "s"}, seed=0, n=8)
-    kinds = [p["rejected_type"] for p in pairs]
-    assert len(pairs) == 8 and set(kinds) == {"sft_failure", "hallucination", "keyword_stuffed", "generic"}
-    assert all(p["chosen"][0]["role"] == "assistant" for p in pairs)
+def cand(text, faith, seo=1.0, words=800, problems=()):
+    return {"text": text, "faithfulness": faith, "seo_score": seo, "words": words, "problems": list(problems)}
 
 
-def test_sft_failure_slots_are_the_pairs_that_use_sft_failures():
+def test_faithfulness_pair_prefers_the_most_faithful_clean_answer():
+    scored = {"teacher": cand("t", 0.50), "sft": [cand("s1", 0.30), cand("s2", 0.60)]}
+    chosen, rejected = faithfulness_pair(scored, margin=0.08)
+    assert (chosen["text"], rejected["text"]) == ("s2", "s1")
+    scored["sft"][1]["problems"] = ["ungrounded_entity"]                     # a failing sample is never chosen
+    assert faithfulness_pair(scored, 0.08)[0]["text"] == "t"
+    assert faithfulness_pair({"teacher": cand("t", 0.35), "sft": [cand("s1", 0.30)]}, 0.08) is None   # margin
+    assert faithfulness_pair({"teacher": cand("t", 0.9, seo=0.75), "sft": [cand("s1", 0.3)]}, 0.08) is None  # SEO
+    assert faithfulness_pair({"teacher": cand("t", 0.9, words=500), "sft": [cand("s1", 0.3)]}, 0.08) is None  # length
+
+
+def test_assemble_adds_synthetic_pairs_as_a_share():
     prompts = [{"episode_id": f"e{i}", "prompt": [], "chosen": "c",
                 "rejected": {"hallucination": "h", "keyword_stuffed": "k", "generic": "g"}} for i in range(12)]
-    slots = {p["episode_id"] for p in sft_failure_slots(prompts, seed=0, n=12)}
-    pairs = assemble(prompts, {p["episode_id"]: "s" for p in prompts}, seed=0, n=12)
-    assert len(slots) == 3
-    assert slots == {p["episode_id"] for p in pairs if p["rejected_type"] == "sft_failure"}
+    order = [p["episode_id"] for p in sampling_order(prompts, seed=0, n=12)]
+    scored = {e: {"teacher": cand("t", 0.6), "sft": [cand("s1", 0.3), cand("s2", 0.4)]} for e in order[:4]}
+    pairs = assemble(prompts, scored, seed=0, n=12, margin=0.08, synthetic_share=0.33)
+    kinds = [p["rejected_type"] for p in pairs]
+    assert kinds[:4] == ["sft_less_faithful"] * 4 and len(pairs) == 6     # 4 on-policy + 2 synthetic (a third)
+    assert set(kinds[4:]) == {"hallucination", "keyword_stuffed"} and pairs[0]["faithfulness"] == [0.6, 0.3]
+    assert [p["episode_id"] for p in pairs[:4]] == order[:4] and all(p["chosen"][0]["role"] == "assistant" for p in pairs)
+    assert {p["rejected_type"] for p in assemble(prompts, {}, seed=0, n=12)} == {"hallucination", "keyword_stuffed", "generic"}
+    one = {order[0]: scored[order[0]]}                                  # smoke: 1 scored prompt, still >= min_pairs
+    assert len(assemble(prompts, one, seed=0, n=12)) == 1 and len(assemble(prompts, one, seed=0, n=12, min_pairs=8)) == 8
+
+
+def test_score_candidate_uses_the_eval_scorer():
+    from src.train.score_samples import score_candidate
+    from tests.test_eval import CHUNKS, WordOverlapNLI
+    from tests.test_teacher import ARTICLE
+
+    prompt = {"episode_id": "e1", "primary_keyword": "drone delivery", "notes_text": NOTES}
+    good = score_candidate(ARTICLE, prompt, CHUNKS, WordOverlapNLI())
+    assert set(good) == {"text", "problems", "faithfulness", "seo_score", "words", "flesch",
+                         "hallucinated_entities", "hallucinated_numbers"} and good["text"] == ARTICLE
+    repaired = score_candidate(ARTICLE.replace('["p"]}', '["p"],}'), prompt, CHUNKS, WordOverlapNLI())
+    assert "social_not_strict_json" in repaired["problems"]  # the training filter repairs it; the eval would not

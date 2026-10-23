@@ -170,50 +170,76 @@
       "version": 4
     },
     "pod2post-04-dpo": {
-      "code_hash": "6046f8485438",
-      "finished_at": "2026-10-22T17:36:18+00:00",
+      "code_hash": "fd51ba765de2",
+      "finished_at": "2026-10-23T13:34:23+00:00",
       "kernel": "04_dpo",
       "logged": true,
       "mode": "full",
-      "pulled_to": "runs/2026-10-22/04_dpo-v2",
-      "pushed_at": "2026-10-22T14:21:32+00:00",
-      "resume": false,
-      "status": "complete",
-      "version": 2
-    },
-    "pod2post-04-dpo-smoke": {
-      "code_hash": "6046f8485438",
-      "finished_at": "2026-10-22T14:17:37+00:00",
-      "kernel": "04_dpo",
-      "logged": true,
-      "mode": "smoke",
-      "pulled_to": "runs/2026-10-22/04_dpo-smoke-v5",
-      "pushed_at": "2026-10-22T13:49:48+00:00",
-      "resume": false,
-      "status": "complete",
-      "version": 5
-    },
-    "pod2post-05-eval": {
-      "code_hash": "fef61fd1c705",
-      "kernel": "05_eval",
-      "logged": false,
-      "mode": "full",
-      "pushed_at": "2026-10-23T04:44:13+00:00",
-      "resume": false,
-      "status": "running",
-      "version": 1
-    },
-    "pod2post-05-eval-smoke": {
-      "code_hash": "fef61fd1c705",
-      "finished_at": "2026-10-22T21:37:28+00:00",
-      "kernel": "05_eval",
-      "logged": true,
-      "mode": "smoke",
-      "pulled_to": "runs/2026-10-22/05_eval-smoke-v4",
-      "pushed_at": "2026-10-22T19:33:52+00:00",
-      "resume": false,
+      "pulled_to": "runs/2026-10-23/04_dpo-v4",
+      "pushed_at": "2026-10-23T12:30:54+00:00",
+      "resume": true,
       "status": "complete",
       "version": 4
+    },
+    "pod2post-04-dpo-smoke": {
+      "code_hash": "fd51ba765de2",
+      "finished_at": "2026-10-23T12:28:17+00:00",
+      "kernel": "04_dpo",
+      "logged": true,
+      "mode": "smoke",
+      "pulled_to": "runs/2026-10-23/04_dpo-smoke-v8",
+      "pushed_at": "2026-10-23T12:24:05+00:00",
+      "resume": true,
+      "status": "complete",
+      "version": 8
+    },
+    "pod2post-05-eval": {
+      "code_hash": "2f994dacacd9",
+      "finished_at": "2026-10-23T15:15:27+00:00",
+      "kernel": "05_eval",
+      "logged": true,
+      "mode": "full",
+      "pulled_to": "runs/2026-10-23/05_eval-v4",
+      "pushed_at": "2026-10-23T14:37:26+00:00",
+      "resume": true,
+      "status": "complete",
+      "version": 4
+    },
+    "pod2post-05-eval-smoke": {
+      "code_hash": "2f994dacacd9",
+      "finished_at": "2026-10-23T14:36:47+00:00",
+      "kernel": "05_eval",
+      "logged": true,
+      "mode": "smoke",
+      "pulled_to": "runs/2026-10-23/05_eval-smoke-v6",
+      "pushed_at": "2026-10-23T14:17:14+00:00",
+      "resume": true,
+      "status": "complete",
+      "version": 6
+    },
+    "pod2post-06-judge": {
+      "code_hash": "63b8dee3f333",
+      "finished_at": "2026-10-23T16:20:55+00:00",
+      "kernel": "06_judge",
+      "logged": true,
+      "mode": "full",
+      "pulled_to": "runs/2026-10-23/06_judge-v1",
+      "pushed_at": "2026-10-23T15:16:34+00:00",
+      "resume": false,
+      "status": "complete",
+      "version": 1
+    },
+    "pod2post-06-judge-smoke": {
+      "code_hash": "63b8dee3f333",
+      "finished_at": "2026-10-23T11:15:46+00:00",
+      "kernel": "06_judge",
+      "logged": true,
+      "mode": "smoke",
+      "pulled_to": "runs/2026-10-23/06_judge-smoke-v1",
+      "pushed_at": "2026-10-23T11:04:26+00:00",
+      "resume": false,
+      "status": "complete",
+      "version": 1
     }
   }
 }

@@ -29,6 +29,8 @@ for slug in UPSTREAM:
     name = "sft" if "-03-sft" in slug else "sft_dpo" if "-04-dpo" in slug else None
     if name:
         systems[name] = str(K.find_upstream(slug) / "adapter")
+if "sft" in systems:  # ablation: SFT's articles from base's notes (D41)
+    systems["sft_base_notes"] = systems["sft"]
 resume_dir = K.find_upstream(SLUG) if RESUME else None
 summary = E.run(K.find_upstream(DATA), K.WORKING, cfg, systems, smoke=bool(SMOKE), resume_dir=resume_dir)
 print(json.dumps(summary, indent=2))

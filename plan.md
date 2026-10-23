@@ -83,7 +83,7 @@ The pipeline stops on any failure it can't fix itself (an acceptance check, an e
 
 ✅ **Done when:** ≥ 420 Stage A + ≥ 280 Stage B examples survive filtering. *(The first filter pass kept only 168 Stage B. Most drops were false positives such as "U.S." vs "America", acronyms and surname-only mentions. With the fixed grounding check: **1,331 A / 315 B**. 7.1 GPU-h including smoke runs.)*
 
-### Step 5 · Phase 4: Baseline eval — ⏳ part of `05_eval`
+### Step 5 · Phase 4: Baseline eval — ✅ done in `05_eval`
 🤖 **Prompt:**
 > Do Phase 4: implement the eval suite (spec §6) and its unit tests, then run the base model zero-shot on the test set on Kaggle. Write the baseline row in reports/results.md.
 
@@ -99,18 +99,20 @@ The pipeline stops on any failure it can't fix itself (an acceptance check, an e
 
 Note: environment variables are visible to anyone who can edit that environment. That's fine for a personal account; never share the environment.
 
-### Step 6 · Phase 5: SFT — ✅ trained (eval pending)
+### Step 6 · Phase 5: SFT — ❌ trained, misses the faithfulness target
 🤖 **Prompt:**
 > Do Phase 5. Run SFT in SMOKE mode, show me the loss curve, then run the full SFT on Kaggle with checkpointing. When done, run eval on the SFT adapter and add the SFT row to results.md. Update runs/state.json and commit.
 
 ✅ **Done when:** SFT beats baseline on faithfulness and SEO score.
 ❌ **If it doesn't:** check data quality first (Step 4), then learning rate / epochs. Don't just train longer.
 
+*(Eval 2026-10-23: SEO 97.8% vs base 80.5%, but faithfulness 38.6% vs 43.5% (95% CI of the gap −8.5 to −1.3 points) and Flesch 29.7 vs 48.7. Fewer articles invent an entity or number (26% vs 44%): the teacher filter checked entities, numbers and format, never sentence-level faithfulness. Data check and fix: D39.)*
+
 ---
 
 ## Part 3 — DPO, report, demo (☁️ or 💻)
 
-### Step 7 · Phase 6: DPO — ✅ trained (eval pending)
+### Step 7 · Phase 6: DPO — ❌ target missed after 3 runs
 🤖 **Prompt:**
 > Do Phase 6: build the DPO preference set (spec §4.4) using the SFT adapter's failures plus synthetic rejected answers, then run DPO from the SFT adapter (SMOKE first). Evaluate and add the SFT+DPO row to results.md.
 
@@ -118,13 +120,17 @@ Note: environment variables are visible to anyone who can edit that environment.
 
 *(Trained 2026-10-22: 36/36 steps on 285 pairs, val reward accuracy 100%, margin 3.06. The first full run hit the 3 h cap while sampling the SFT model; the sampling now covers only the prompts that use an SFT failure, under a 1 h budget (D35). 61% of the rejected answers are injected hallucinations, so the high reward accuracy may reflect easy pairs; the eval decides.)*
 
-### Step 8 · Phase 7: Final eval + report — ⏳ next
+*(Eval 2026-10-23: within noise of SFT on every metric, so the target is missed. Run 2 trains on the SFT model's own samples scored with the eval's faithfulness scorer: least faithful sample vs. most faithful clean answer, plus a third synthetic pairs (D39). Run 2 found SFT nearly as faithful as the teacher on MediaSum (51.2% vs 53.8%) but made only 70 pairs and 9 steps; the adapter moved 0.33%, so run 3 trains on the same pairs for 3 epochs at 2e-5 (D40). Run 3 moved the adapter 1.41% and is still within noise of SFT: invented entities 0.42 vs 0.42, faithfulness 39.1% vs 38.6% (CI −2.9 to +3.9), SEO 96.5% vs 97.8%.)*
+
+### Step 8 · Phase 7: Final eval + report — ✅ done
 🤖 **Prompt:**
 > Do Phase 7: full eval of base, SFT, and SFT+DPO (plus the teacher as upper bound if budget allows). Add the LLM-judge win rates, cost/latency per episode, and 3 side-by-side example articles to reports/results.md. Write the headline result sentence from spec §1 with real numbers.
 
 *(The judge is kernel `06_judge`. The cost per article is a **free estimate**, not a paid API call: measured tokens × published API prices, compared with T4-seconds at $0.526 per T4-hour. See spec §6.)*
 
 *(How the eval runs: generation on both T4s with tensor parallel; SFT+DPO writes from SFT's Stage A notes, since DPO trained on Stage B only (D38); 8 episodes per batch, saved after each, no new batch after 2 h, and `pipeline` resumes it automatically (D37). Estimated ~5–5.5 GPU-hours, down from ~15 on one T4 with every system running Stage A. Start with `python3 scripts/kaggle_run.py pipeline --full --from 05_eval --skip 06_judge`; it runs the smoke version first.)*
+
+*(Done 2026-10-23: `reports/results.md` from `05_eval-v4` and `06_judge-v1`. The judge prefers base: SFT wins 12% and loses 48% of episodes, SFT + DPO 14% / 52%. An ablation, SFT writing from base's notes, shows the faithfulness loss is in the article writer, not the notes: −6.4 points vs base on the same notes (D41).)*
 
 ### Step 9 · Phase 8: Demo — ✅ built
 🤖 **Prompt:**
@@ -142,10 +148,10 @@ Note: environment variables are visible to anyone who can edit that environment.
 
 | Work | Planned GPU-hours | Measured so far |
 |---|---|---|
-| Smoke tests, transcription | ~1.5 | 2.9 (all smoke runs: 2.8; full transcription: 0.1) |
+| Smoke tests, transcription | ~1.5 | 1.4 (smoke runs of 00–03: 1.3; full transcription: 0.1; later smoke runs are in the rows below) |
 | Teacher gen (option 1), baseline, SFT | ~4–10 | teacher 6.1 (full, incl. 2 automatic resumes); SFT 2.8 (full, 1 resume) |
-| DPO, final eval, judge | ~4 | DPO 5.7 (v1: 3.0, no output, hit the 3 h cap while sampling, D35; v2: 2.7, complete) |
-| **Total** | **~10–16** | **17.5 so far**; ~6–7 more estimated (eval smoke ~0.5, full eval ~5–5.5 on 2 T4s, judge; D38) |
+| DPO, final eval, judge | ~4 | DPO 8.3 full (v1: 3.0, no output, hit the 3 h cap while sampling, D35; v2: 2.7; v3: 1.5, D39; v4: 1.0, D40) + 2.1 smoke; eval 4.7 full (3.6 first eval, D38; 1.2 re-evals, D40–D41) + 1.7 smoke; judge 1.05 + 0.2 smoke |
+| **Total** | **~10–16** | **27.9** (Kaggle's counter; the local log says 28.3). GPU work is finished |
 
 Check `python3 scripts/kaggle_run.py quota` (or the Kaggle settings page) before starting a big run.
 

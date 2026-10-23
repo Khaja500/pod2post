@@ -11,8 +11,9 @@ Resumable (the full eval is ~13 GPU-hours, D37): episodes go through the pipelin
 `episodes_per_batch` at a time, each batch is appended to outputs/<system>.jsonl and its
 generation stats to outputs/<system>.stats.json, and no new batch starts after `time_budget_s`.
 A system is scored as soon as all its episodes are generated. A rerun with --resume copies
-the previous run's outputs/ and scores/ forward and continues. results.json lists the scored
-systems, the pending ones, and stopped_by_time_budget.
+the previous run's outputs/ and scores/ forward and continues; a system whose adapter was
+retrained since (adapter_run, D39) is regenerated, and so is a system that writes from its
+notes. results.json lists the scored systems, the pending ones, and stopped_by_time_budget.
 """
 from __future__ import annotations
 
@@ -55,7 +56,36 @@ def gen_stats(stats: dict, gpus: int, notes_from: str | None) -> dict:
     return {"tokens_per_s": round(stats["generated_tokens"] / max(stats["generate_seconds"], 1e-6), 1),
             "seconds_per_episode": round(stats["generation_wall_s"] / max(stats["episodes"], 1), 1),
             "generated_tokens": stats["generated_tokens"], "generation_wall_s": round(stats["generation_wall_s"]),
-            "gpus": gpus, "notes_from": notes_from}
+            "gpus": gpus, "notes_from": notes_from, "adapter_run": stats.get("adapter_run")}
+
+
+def _started_at(manifest: Path) -> str | None:
+    return json.loads(manifest.read_text()).get("started_at") if manifest.is_file() else None
+
+
+def adapter_run(adapter: str | None) -> str | None:
+    """Start time of the training run that wrote the adapter (its kernel's run_manifest.json)."""
+    return _started_at(Path(adapter).parent / "run_manifest.json") if adapter else None
+
+
+def stale_systems(out_dir: Path, systems: dict[str, str | None], notes_from: dict, resume_dir: Path | None) -> set[str]:
+    """Systems whose carried-over outputs came from another adapter (it was retrained since), plus
+    the systems that write from their notes. Stats without `adapter_run` predate the field: they
+    are stale when the adapter's run started after the run they were resumed from."""
+    resumed_from = _started_at(resume_dir / "run_manifest.json") if resume_dir is not None else None
+    stale = set()
+    for name, adapter in systems.items():
+        path, current = out_dir / "outputs" / f"{name}.stats.json", adapter_run(adapter)
+        if current is None or not path.is_file():
+            continue
+        made_with = json.loads(path.read_text()).get("adapter_run")
+        if made_with:
+            changed = made_with != current
+        else:
+            changed = resumed_from is not None and current > resumed_from
+        if changed:
+            stale.add(name)
+    return stale | {name for name, source in notes_from.items() if source in stale and name in systems}
 
 
 def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None], smoke: bool,
@@ -70,6 +100,10 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None]
             for f in (resume_dir / sub).iterdir():
                 if f.is_file() and not (out_dir / sub / f.name).is_file():
                     shutil.copy(f, out_dir / sub / f.name)
+    for name in sorted(stale_systems(out_dir, systems, cfg.get("notes_from", {}), resume_dir)):
+        print(f"[eval] {name}: adapter retrained since its outputs were made; regenerating", flush=True)
+        for f in (f"outputs/{name}.jsonl", f"outputs/{name}.stats.json", f"scores/{name}.jsonl"):
+            (out_dir / f).unlink(missing_ok=True)
     g, size, gpus = cfg["generation"], cfg["episodes_per_batch"], cfg["generation"].get("tensor_parallel_size", 1)
     summary = {"episodes": len(episodes), "smoke": smoke, "systems": {}, "pending": [], "stopped_by_time_budget": False}
     for name, adapter in systems.items():
@@ -78,6 +112,7 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None]
         todo = [e for e in episodes if e["episode_id"] not in done]
         stats = json.loads(stats_path.read_text()) if stats_path.is_file() else \
             {"episodes": 0, "generated_tokens": 0, "generate_seconds": 0.0, "generation_wall_s": 0.0}
+        stats.setdefault("adapter_run", adapter_run(adapter))
         source = cfg.get("notes_from", {}).get(name)
         source = source if source in systems else None
         prior = {r["episode_id"]: r for r in _load(out_dir / "outputs" / f"{source}.jsonl")} if source else {}
@@ -98,7 +133,7 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None]
             tb = time.time()
             reuse = prior if source and all(e["episode_id"] in prior for e in batch) else None
             _append(out_path, pipeline.run(batch, gen, g["max_tokens"], g["notes_budget_tokens"], notes_from=reuse))
-            stats = {"episodes": stats["episodes"] + len(batch),
+            stats = {**stats, "episodes": stats["episodes"] + len(batch),
                      "generated_tokens": stats["generated_tokens"] + gen.generated_tokens,
                      "generate_seconds": stats["generate_seconds"] + gen.generate_seconds,
                      "generation_wall_s": stats["generation_wall_s"] + time.time() - tb}

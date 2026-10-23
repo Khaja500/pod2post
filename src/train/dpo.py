@@ -2,8 +2,8 @@
 
 The SFT adapter is loaded as a trainable PEFT model. TRL then copies it into a frozen
 "ref" adapter, so the reference policy is the SFT model rather than the base model.
-Pairs come from src.data.build_dpo.assemble(): chosen = teacher, rejected = one of four
-failure types, so "rewards/accuracies" by type shows what the model learned to avoid.
+Pairs come from src.data.build_dpo.assemble(): mostly the SFT model's own less faithful
+sample vs. the most faithful clean answer (D39), plus synthetic teacher-vs-corrupted pairs.
 """
 from __future__ import annotations
 
