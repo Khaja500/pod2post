@@ -171,12 +171,14 @@
     },
     "pod2post-04-dpo": {
       "code_hash": "6046f8485438",
+      "finished_at": "2026-10-22T17:36:18+00:00",
       "kernel": "04_dpo",
-      "logged": false,
+      "logged": true,
       "mode": "full",
+      "pulled_to": "runs/2026-10-22/04_dpo-v2",
       "pushed_at": "2026-10-22T14:21:32+00:00",
       "resume": false,
-      "status": "queued",
+      "status": "complete",
       "version": 2
     },
     "pod2post-04-dpo-smoke": {
@@ -191,18 +193,27 @@
       "status": "complete",
       "version": 5
     },
+    "pod2post-05-eval": {
+      "code_hash": "fef61fd1c705",
+      "kernel": "05_eval",
+      "logged": false,
+      "mode": "full",
+      "pushed_at": "2026-10-23T04:44:13+00:00",
+      "resume": false,
+      "status": "running",
+      "version": 1
+    },
     "pod2post-05-eval-smoke": {
-      "code_hash": "c7b6ba470248",
-      "finished_at": "2026-10-21T12:04:28+00:00",
+      "code_hash": "fef61fd1c705",
+      "finished_at": "2026-10-22T21:37:28+00:00",
       "kernel": "05_eval",
       "logged": true,
       "mode": "smoke",
-      "note": "push recorded by hand: the pushing process was stopped before it saved state",
-      "pulled_to": "runs/2026-10-21/05_eval-smoke-v2",
-      "pushed_at": "2026-10-21T09:47:35+00:00",
+      "pulled_to": "runs/2026-10-22/05_eval-smoke-v4",
+      "pushed_at": "2026-10-22T19:33:52+00:00",
       "resume": false,
       "status": "complete",
-      "version": 2
+      "version": 4
     }
   }
 }

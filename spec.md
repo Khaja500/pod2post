@@ -41,7 +41,7 @@ The core of the project is **post-training a small open model (~3–4B parameter
 
 | Resource | Limit | Design consequence |
 |---|---|---|
-| GPU | `NvidiaTeslaT4` = a 2× T4 machine (16 GB each); P100 is no longer offered | Training/eval use **one T4** (`CUDA_VISIBLE_DEVICES=0` in code); the teacher and judge use both (tensor parallel). 4-bit QLoRA; **fp16, not bf16** (T4 = sm_75, verified); no FlashAttention-2 |
+| GPU | `NvidiaTeslaT4` = a 2× T4 machine (16 GB each); P100 is no longer offered | Training uses **one T4** (`CUDA_VISIBLE_DEVICES=0` in code); the teacher, eval generation and judge use both (tensor parallel). 4-bit QLoRA; **fp16, not bf16** (T4 = sm_75, verified); no FlashAttention-2 |
 | Weekly GPU quota | 30 h/week (`kaggle quota`; resets Saturdays 00:00 UTC) | Total project budget ≤ 30 GPU-hours (raised from 20 on 2026-10-22); leave headroom |
 | Session length | 12 h max; we cap every run at **3 h** (`kaggle kernels push -t`) | Long jobs stop themselves at a time budget (teacher 2 h 15 m, SFT 2 h 30 m, DPO 2 h), save, and are **resumed automatically** |
 | Disk | `/kaggle/working` output ~20 GB | Save only LoRA adapters, never merged weights. Caches (HF, Unsloth) go to `/tmp` |
@@ -189,7 +189,7 @@ time_budget_s: 7200
 
 ## 6. Evaluation (`src/eval/`, kernels `05_eval` and `06_judge`)
 
-Run every system on the 50 held-out episodes with the same pipeline, prompts and sampling (temperature 0.3): **base zero-shot**, **SFT**, **SFT+DPO**. Optionally run the **teacher** as an upper bound.
+Run every system on the 50 held-out episodes with the same pipeline, prompts and sampling (temperature 0.3): **base zero-shot**, **SFT**, **SFT+DPO**. Optionally run the **teacher** as an upper bound. SFT+DPO writes its articles from **SFT's Stage A notes**: DPO was trained on Stage B only, and sharing the notes isolates the comparison to the article step (D38). The run is resumable: 8 episodes per batch, saved after each, no new batch after 2 h, resumed automatically until every system is done (D37).
 
 | Metric | How |
 |---|---|
@@ -199,8 +199,8 @@ Run every system on the 50 held-out episodes with the same pipeline, prompts and
 | **Readability** | Flesch reading ease (textstat) on prose sentences only, target 50–70 |
 | **Format validity** | % valid JSON social packs (strict, no repair), % X posts ≤ 280 chars |
 | **Quality (LLM judge)** | `06_judge`: the teacher compares each system with base, in **both A/B orders**, using transcript passages retrieved for both articles. Reports win/tie/loss |
-| **Cost/latency** | Tokens/sec and seconds per episode on **one** T4 (vLLM, all 50 episodes batched) |
-| **Cost per article** (free estimate) | `configs/costs.yaml` + `src/eval/cost.py`. API cost = the pipeline's prompt tokens (rebuilt exactly) + measured completion tokens × published per-token prices (OpenRouter, date recorded). Self-hosted cost = seconds per episode × T4 $/hour (AWS g4dn.xlarge on-demand as reference; Kaggle free). The one-time training GPU-hours are reported separately. **No API is called** |
+| **Cost/latency** | Tokens/sec and seconds per episode on **two** T4s (vLLM tensor parallel, 8 episodes per batch); T4-seconds = wall time × 2. SFT+DPO's times cover Stage B only |
+| **Cost per article** (free estimate) | `configs/costs.yaml` + `src/eval/cost.py`. API cost = the pipeline's prompt tokens (rebuilt exactly) + measured completion tokens × published per-token prices (OpenRouter, date recorded). Self-hosted cost = T4-seconds per episode × one T4's $/hour (AWS g4dn.xlarge on-demand as reference; Kaggle free), measured on the system that ran the whole pipeline (SFT, whose notes SFT+DPO reuses). The one-time training GPU-hours are reported separately. **No API is called** |
 
 Output: `reports/results.md` with the comparison table, SEO check breakdown, cost table, judge table, 3 side-by-side example articles and the headline sentence (§1).
 
@@ -299,12 +299,12 @@ pod2post/
 | 2. Transcribe | Whisper on 5 CC audio episodes | Transcripts saved; WER spot-checked on 1 episode | ~1 h | ✅ Done. 0.2 h. WER 21.1% raw, 4.1% substitutions + deletions (D33) |
 | 3. Teacher gen | 600 Stage A + 400 Stage B examples, filtered | Drop-rate report; ≥ 70% of target survives | 0–6 h | ✅ Done. 7.1 h incl. smoke. Kept 1,331 A / 315 B (D31) |
 | 4. Baseline eval | Base model zero-shot on the test set | `results.md` has the baseline row | ~1 h | ⏳ Runs inside `05_eval`, together with all systems |
-| 5. SFT | LoRA adapter | Beats baseline on faithfulness and SEO score | ~2–3 h | ⏳ Running |
-| 6. DPO | DPO adapter | Fewer hallucinated entities than SFT, no SEO regression | ~2 h | ⏳ |
-| 7. Eval + report | Full table, examples, cost/latency, judge | `reports/results.md` complete | ~2 h | ⏳ |
+| 5. SFT | LoRA adapter | Beats baseline on faithfulness and SEO score | ~2–3 h | ✅ Trained: 2 epochs, val loss 0.370 → 0.345, 2.8 h (1 resume). Eval pending |
+| 6. DPO | DPO adapter | Fewer hallucinated entities than SFT, no SEO regression | ~2 h | ✅ Trained: 36/36 steps, 285 pairs, val reward accuracy 100%, margin 3.06; 5.7 h incl. a run lost to the 3 h cap (D35). Eval pending |
+| 7. Eval + report | Full table, examples, cost/latency, judge | `reports/results.md` complete | ~6 h | ⏳ Next: resumable eval on both T4s (D37, D38) |
 | 8. Demo | Gradio app | Paste transcript or upload short audio → article + social | 0 h | ✅ Built (`app/gradio_app.py`); needs the trained adapter |
 
-GPU used so far: 14.8 h of the 30 h budget. The remaining ~16 h estimate covers DPO (~2 h), the full eval (~14 h over ~6 resumed 3 h runs, D37) and the judge.
+GPU used so far: 17.5 h of the 30 h budget. The remaining ~6–7 h estimate covers the eval smoke run (~0.5 h), the full eval (~5–5.5 h over 2–3 resumed runs, D38) and the judge.
 
 ---
 

@@ -1,14 +1,17 @@
 # Evaluation (spec §6), kernel 05_eval.
 test_set_size: 50
 systems: [base, sft, sft_dpo]   # base always; sft / sft_dpo when their adapters are attached
-episodes_per_batch: 4         # outputs are saved after every batch, so a resumed run loses at most one
-time_budget_s: 6600           # no new batch after 1h50m: install + a last batch (<= 45 min) + scoring fit 3 h
+notes_from: {sft_dpo: sft}    # SFT + DPO writes from SFT's Stage A notes: DPO trained on Stage B only (D38)
+episodes_per_batch: 8         # outputs are saved after every batch, so a resumed run loses at most one
+time_budget_s: 7200           # no new batch after 2 h: install + a last batch (<= 25 min on 2 T4s) + scoring fit 3 h
 smoke_time_budget_s: 2400     # smoke (2 episodes) always finishes in one run
 base_model: Qwen/Qwen3-4B-Instruct-2507   # fp16 in vLLM; adapters were trained on its Unsloth 4-bit build
 
 generation:
   max_model_len: 8192
-  gpu_memory_utilization: 0.88
+  tensor_parallel_size: 2       # both T4s: Kaggle bills session time, and the KV cache grows ~5x (D38)
+  gpu_memory_utilization: 0.70  # per GPU. vLLM overshot 0.80 by ~1 GB (CUDA-graph estimate) and the NLI
+                                # scorer OOMed on GPU 1 (smoke v3); 0.70 leaves ~3 GB, KV still ~52k tokens
   temperature: 0.3              # same sampling for every system
   top_p: 0.8
   top_k: 20
@@ -19,6 +22,7 @@ generation:
 
 faithfulness:
   nli_model: MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli   # MIT, ungated; label order read from config
+  batch_size: 8                 # pairs per NLI forward pass; it shares GPU 1 with a vLLM worker
   top_k_windows: 3
   threshold: 0.5
 

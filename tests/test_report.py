@@ -60,3 +60,25 @@ def test_cost_estimate_uses_measured_tokens_and_prices(tmp_path):
     assert est["self_hosted_usd_per_article"] == {"gpu": 0.01, "free": 0.0}
     assert est["times_cheaper_than_comparator"] == round(est["api_usd_per_article"]["api/x"] / 0.01, 1)
     assert est["one_time_usd_at_reference_gpu"] == 0.9
+
+
+def test_cost_counts_every_t4_used(tmp_path):
+    from src.eval import cost
+
+    (tmp_path / "outputs").mkdir()
+    write_jsonl(tmp_path / "outputs" / "sft.jsonl", [
+        {"episode_id": "e", "title": "T", "notes_text": "n", "primary_keyword": "kw", "secondary_keywords": []}])
+    cfg = {"checked": "2026-10-23", "comparator": "api/x", "reference_gpu": "gpu",
+           "api_models": {"api/x": {"input": 1.0, "output": 10.0}}, "self_hosted_usd_per_hour": {"gpu": 0.36}}
+    est = cost.estimate(tmp_path, "sft", {"generated_tokens": 10, "seconds_per_episode": 50, "gpus": 2},
+                        {"e": ["chunk"]}, lambda t: len(t.split()), cfg)
+    assert est["seconds_per_episode_1xT4"] == 100 and est["self_hosted_usd_per_article"] == {"gpu": 0.01}
+
+
+def test_reused_notes_take_timing_from_their_source():
+    base = {"faithfulness": 0.5, "hallucinated_entities_per_article": 1.0, "seo_score": 0.9,
+            "seconds_per_episode": 30, "gpus": 2}
+    systems = {"base": base, "sft": {**base, "seconds_per_episode": 40},
+               "sft_dpo": {**base, "seconds_per_episode": 5, "notes_from": "sft"}}
+    assert report.timed_system(systems, "sft_dpo") == "sft" and report.timed_system(systems, "sft") == "sft"
+    assert "at 80 T4-seconds per episode" in report.headline(systems)

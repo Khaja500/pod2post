@@ -1,9 +1,10 @@
 # %% [markdown]
 # # pod2post · 05_eval — every system on the 50 held-out episodes
 # Base model zero-shot, plus SFT / SFT+DPO when their kernels are attached as inputs.
-# Generation on one T4 (vLLM, fp16 base + LoRA), NLI faithfulness scoring on the other.
-# Full: ~13 GPU-hours, so it stops starting new episode batches at 1h50m and
-# `kaggle_run.py push 05_eval --full --resume` continues (the pipeline resumes automatically).
+# Generation on both T4s (vLLM tensor parallel, fp16 base + LoRA), NLI faithfulness scoring on GPU 1;
+# SFT+DPO writes from SFT's Stage A notes. Full: ~5 GPU-hours, so it stops starting new episode
+# batches at 2 h and `kaggle_run.py push 05_eval --full --resume` continues (the pipeline resumes
+# automatically).
 
 # %%
 import json

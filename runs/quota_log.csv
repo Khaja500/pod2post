@@ -29,3 +29,6 @@ kernel,slug,mode,version,code_hash,pushed_at,finished_at,wall_hours,kernel_runti
 04_dpo,pod2post-04-dpo-smoke,smoke,4,3604b9b2ae76,2026-10-22T06:32:09+00:00,2026-10-22T09:06:41+00:00,2.576,0.353,complete
 04_dpo,pod2post-04-dpo,full,1,3604b9b2ae76,2026-10-22T09:14:40+00:00,2026-10-22T12:15:39+00:00,3.016,,cancel_acknowledged
 04_dpo,pod2post-04-dpo-smoke,smoke,5,6046f8485438,2026-10-22T13:49:48+00:00,2026-10-22T14:17:37+00:00,0.464,0.265,complete
+04_dpo,pod2post-04-dpo,full,2,6046f8485438,2026-10-22T14:21:32+00:00,2026-10-22T17:36:18+00:00,3.246,2.701,complete
+05_eval,pod2post-05-eval-smoke,smoke,3,443389f80102,2026-10-22T19:16:49+00:00,2026-10-22T19:32:17+00:00,0.258,,error
+05_eval,pod2post-05-eval-smoke,smoke,4,fef61fd1c705,2026-10-22T19:33:52+00:00,2026-10-22T21:37:28+00:00,2.060,0.349,complete

@@ -3,7 +3,7 @@
 Token usage per episode comes from the evaluated pipeline itself: prompt tokens are rebuilt
 exactly from the test transcripts and each system's merged notes (same prompts the model saw),
 completion tokens are what the model generated on Kaggle. API cost = tokens x published prices;
-self-hosted cost = measured seconds per episode on one T4 x the GPU's hourly price.
+self-hosted cost = measured T4-seconds per episode (wall time x T4s used) x one T4's hourly price.
 """
 from __future__ import annotations
 
@@ -31,12 +31,12 @@ def estimate(eval_dir: Path, system: str, agg: dict, chunks: dict[str, list[str]
     p_tok = sum(prompt_tokens(r, chunks[r["episode_id"]], count) for r in results) / len(results)
     c_tok = agg["generated_tokens"] / len(results)
     api = {name: round((p_tok * p["input"] + c_tok * p["output"]) / 1e6, 5) for name, p in cfg["api_models"].items()}
-    hosted = {name: round(agg["seconds_per_episode"] / 3600 * usd, 5)
-              for name, usd in cfg["self_hosted_usd_per_hour"].items()}
+    t4_seconds = agg["seconds_per_episode"] * agg.get("gpus", 1)
+    hosted = {name: round(t4_seconds / 3600 * usd, 5) for name, usd in cfg["self_hosted_usd_per_hour"].items()}
     ref = hosted[cfg["reference_gpu"]]
     out = {"system": system, "prices_checked": str(cfg["checked"]), "comparator": cfg["comparator"],
            "prompt_tokens_per_episode": round(p_tok), "completion_tokens_per_episode": round(c_tok),
-           "seconds_per_episode_1xT4": agg["seconds_per_episode"], "api_usd_per_article": api,
+           "seconds_per_episode_1xT4": round(t4_seconds, 1), "api_usd_per_article": api,
            "self_hosted_usd_per_article": hosted,
            "times_cheaper_than_comparator": round(api[cfg["comparator"]] / ref, 1) if ref else None}
     if gpu_hours_used is not None:

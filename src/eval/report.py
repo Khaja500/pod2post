@@ -42,6 +42,16 @@ def best_system(systems: dict) -> str | None:
     return "sft_dpo" if "sft_dpo" in systems else "sft" if "sft" in systems else None
 
 
+def timed_system(systems: dict, name: str) -> str:
+    """The system whose timing covers the whole pipeline for `name` (its notes source, if it reused notes)."""
+    source = systems[name].get("notes_from")
+    return source if source in systems else name
+
+
+def t4_seconds(s: dict) -> float:
+    return s["seconds_per_episode"] * s.get("gpus", 1)
+
+
 def project_gpu_hours() -> float | None:
     import csv
 
@@ -57,9 +67,11 @@ def cost_section(run_dirs: list[Path], systems: dict, sources: dict) -> tuple[li
     from src.eval import cost
 
     inputs = cost.load_inputs(REPO)
-    name = best_system(systems) or ("base" if "base" in systems else None)
+    best = best_system(systems) or ("base" if "base" in systems else None)
+    name = timed_system(systems, best) if best else None
     if inputs is None or name is None or "generated_tokens" not in systems[name]:
         return [], None
+    measured = LABELS[name] + ("" if name == best else f", whose notes {LABELS[best]} reuses")
     cfg, chunks = inputs
     from src.data.chunk import hf_token_counter
 
@@ -68,9 +80,10 @@ def cost_section(run_dirs: list[Path], systems: dict, sources: dict) -> tuple[li
     est = cost.estimate(eval_dir, name, systems[name], chunks, count, cfg, project_gpu_hours())
     lines = ["", "## Cost per article (estimate; no API calls)", "",
              f"Same pipeline, same prompts: {est['prompt_tokens_per_episode']:,} prompt + "
-             f"{est['completion_tokens_per_episode']:,} completion tokens per episode (measured for {LABELS[name]}), "
+             f"{est['completion_tokens_per_episode']:,} completion tokens per episode (measured for {measured}), "
              f"priced at published per-token rates (OpenRouter, checked {est['prices_checked']}). Self-hosted = "
-             f"{est['seconds_per_episode_1xT4']:.0f} s per episode on one T4 × the GPU's hourly price. "
+             f"{est['seconds_per_episode_1xT4']:.0f} T4-seconds per episode (wall time × T4s used) × one T4's "
+             "hourly price. "
              "An API model would emit somewhat different token counts, so treat these as estimates.", "",
              "| Option | USD per article | USD per 1,000 articles |", "|---|---|---|"]
     for k, v in est["self_hosted_usd_per_article"].items():
@@ -104,7 +117,7 @@ def headline(systems: dict, est: dict | None = None) -> str | None:
             f"{faith} to the transcript than the base model "
             f"({pct(b['faithfulness'])} → {pct(t['faithfulness'])} of sentences supported), " + entities
             + f"and an SEO checklist score of **{pct(t['seo_score'])}** (base {pct(b['seo_score'])}), "
-            f"at {num(t['seconds_per_episode'], 0)} s per episode on one T4"
+            f"at {num(t4_seconds(systems[timed_system(systems, best)]), 0)} T4-seconds per episode"
             + (f", about **{est['times_cheaper_than_comparator']:.0f}× cheaper** per article than "
                f"`{est['comparator']}` via API (estimate)." if est and est.get("times_cheaper_than_comparator") else "."))
 
@@ -122,8 +135,9 @@ def main(argv: list[str]) -> int:
     systems, outputs, scores, sources = load([Path(a) for a in argv])
     names = [n for n in ORDER if n in systems]
     n_eps = max(s["episodes"] for s in systems.values())
+    split = " (38 TalkRL + 12 Changelog)" if n_eps == 50 else " (smoke subset of the 50)"
     lines = ["# Results", "",
-             f"Held-out test set: {n_eps} episodes (38 TalkRL + 12 Changelog), frozen before any data generation. "
+             f"Held-out test set: {n_eps} episodes{split}, frozen before any data generation. "
              "Every system runs the same map-reduce pipeline (chunk notes → merged notes → article + social pack) "
              "with the same prompts and sampling. Numbers come from `results.json` in the runs listed at the bottom.", ""]
     cost_lines, est = cost_section([Path(a) for a in argv], systems, sources)
@@ -132,7 +146,7 @@ def main(argv: list[str]) -> int:
     lines += ["## Main comparison", "",
               "| System | Faithfulness ↑ | Invented entities / article ↓ | Invented numbers / article ↓ | "
               "Articles with any invention ↓ | SEO score ↑ | Flesch (target 50–70) | Valid social JSON ↑ | "
-              "X posts ≤ 280 ↑ | Tokens/s (1×T4) | s / episode |",
+              "X posts ≤ 280 ↑ | Tokens/s | s / episode |",
               "|---|---|---|---|---|---|---|---|---|---|---|"]
     for n in names:
         s = systems[n]
@@ -141,6 +155,12 @@ def main(argv: list[str]) -> int:
                      f"{pct(s['seo_score'])} | {num(s['flesch'], 1)} ({pct(s['flesch_in_target_rate'])} in range) | "
                      f"{pct(s['social_valid_json_rate'])} | {pct(s['x_posts_ok_rate'])} | {num(s['tokens_per_s'], 0)} | "
                      f"{num(s['seconds_per_episode'], 0)} |")
+    gpus = max(systems[n].get("gpus", 1) for n in names)
+    lines += ["", f"Generation ran on {gpus} T4{'s (tensor parallel)' if gpus > 1 else ''}; s / episode is wall time."]
+    for n in names:
+        if (src := systems[n].get("notes_from")) in systems:
+            lines.append(f"{LABELS[n]} writes its articles from {LABELS[src]}'s Stage A notes (DPO trained on "
+                         "Stage B only), so its tokens/s and s / episode cover Stage B only.")
     checks = list(next(iter(systems.values()))["seo_check_pass_rates"])
     lines += cost_lines
     lines += ["", "## SEO checklist pass rates", "", "| Check | " + " | ".join(LABELS[n] for n in names) + " |",

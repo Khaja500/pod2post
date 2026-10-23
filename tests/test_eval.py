@@ -126,3 +126,36 @@ def test_eval_stops_at_budget_and_resumes(tmp_path, monkeypatch):
     assert set(gen.adapters) == {"sft"} and second["systems"]["base"] == first["systems"]["base"]
     assert len((tmp_path / "run2" / "outputs" / "sft.jsonl").read_text().splitlines()) == 3
     assert json.loads((tmp_path / "run2" / "results.json").read_text())["systems"].keys() == {"base", "sft"}
+
+
+def test_pipeline_reuses_notes_and_runs_stage_b_only():
+    eps = [{"episode_id": "e1", "title": "T1", "chunks": ["a", "b"]}]
+    first = pipeline.run(eps, FakeGen(), {"stage_a": 10, "stage_b": 10})
+    gen = FakeGen()
+    again = pipeline.run(eps, gen, {"stage_a": 10, "stage_b": 10}, notes_from={"e1": first[0]})
+    assert gen.calls == 1 and again[0]["notes_text"] == first[0]["notes_text"]
+    assert again[0]["primary_keyword"] == first[0]["primary_keyword"] and again[0]["article"].startswith("# Drone")
+
+
+def test_eval_system_reuses_notes_of_its_source(tmp_path, monkeypatch):
+    from src.data.chunk import write_jsonl
+    from src.data.testset import HASH_FILE, write_hashes
+    from src.eval import kernel
+
+    ids = ["e1", "e2"]
+    data = tmp_path / "data"
+    data.mkdir()
+    write_jsonl(data / "episodes.jsonl", [{"episode_id": e, "title": f"T {e}", "split": "test"} for e in ids])
+    write_jsonl(data / "chunks.jsonl", [{"episode_id": e, "split": "test", "text": CHUNKS[0]} for e in ids])
+    write_hashes(ids, data / HASH_FILE)
+    cfg = {"time_budget_s": 1e9, "smoke_time_budget_s": 1e9, "episodes_per_batch": 2, "notes_from": {"sft_dpo": "sft"},
+           "generation": {"max_tokens": {"stage_a": 10, "stage_b": 10}, "notes_budget_tokens": 1800,
+                          "tensor_parallel_size": 2}}
+    gen = TimedGen(Clock())
+    res = kernel.run(data, tmp_path / "out", cfg, {"sft": "/a/sft", "sft_dpo": "/a/dpo"}, smoke=False,
+                     gen=gen, scorer=WordOverlapNLI())
+    assert gen.calls == 3  # sft: Stage A + Stage B; sft_dpo: Stage B only
+    assert res["systems"]["sft_dpo"]["notes_from"] == "sft" and res["systems"]["sft"]["notes_from"] is None
+    assert res["systems"]["sft_dpo"]["gpus"] == 2
+    read = lambda n: [json.loads(l) for l in (tmp_path / "out" / "outputs" / f"{n}.jsonl").read_text().splitlines()]
+    assert [r["notes_text"] for r in read("sft_dpo")] == [r["notes_text"] for r in read("sft")]

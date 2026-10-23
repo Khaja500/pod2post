@@ -1,8 +1,11 @@
 """Phase 4/7 evaluation (kernel 05_eval): run every system on the held-out test set and score it.
 
-Generation: vLLM on GPU 0 only (the spec's cost metric is "on a T4"), base model in fp16,
-LoRA adapters switched per system. Scoring: NLI on the second T4, then the metrics in
-src.eval.run_eval. Writes outputs/<system>.jsonl, scores/<system>.jsonl and results.json.
+Generation: vLLM split across both T4s (tensor parallel, D38), base model in fp16, LoRA
+adapters switched per system; times are reported per episode and as T4-seconds (wall x GPUs)
+for the cost estimate. Scoring: NLI on GPU 1 in the memory vLLM leaves free, then the metrics
+in src.eval.run_eval. Writes outputs/<system>.jsonl, scores/<system>.jsonl and results.json.
+A system listed in `notes_from` skips Stage A and writes its articles from another system's
+notes (SFT + DPO from SFT's: DPO trained on Stage B only, D38).
 
 Resumable (the full eval is ~13 GPU-hours, D37): episodes go through the pipeline
 `episodes_per_batch` at a time, each batch is appended to outputs/<system>.jsonl and its
@@ -47,11 +50,12 @@ def _append(path: Path, rows: list[dict]) -> None:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
-def gen_stats(stats: dict) -> dict:
+def gen_stats(stats: dict, gpus: int, notes_from: str | None) -> dict:
     """Generation stats summed over every batch and run of one system."""
     return {"tokens_per_s": round(stats["generated_tokens"] / max(stats["generate_seconds"], 1e-6), 1),
             "seconds_per_episode": round(stats["generation_wall_s"] / max(stats["episodes"], 1), 1),
-            "generated_tokens": stats["generated_tokens"], "generation_wall_s": round(stats["generation_wall_s"])}
+            "generated_tokens": stats["generated_tokens"], "generation_wall_s": round(stats["generation_wall_s"]),
+            "gpus": gpus, "notes_from": notes_from}
 
 
 def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None], smoke: bool,
@@ -66,7 +70,7 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None]
             for f in (resume_dir / sub).iterdir():
                 if f.is_file() and not (out_dir / sub / f.name).is_file():
                     shutil.copy(f, out_dir / sub / f.name)
-    g, size = cfg["generation"], cfg["episodes_per_batch"]
+    g, size, gpus = cfg["generation"], cfg["episodes_per_batch"], cfg["generation"].get("tensor_parallel_size", 1)
     summary = {"episodes": len(episodes), "smoke": smoke, "systems": {}, "pending": [], "stopped_by_time_budget": False}
     for name, adapter in systems.items():
         out_path, stats_path = out_dir / "outputs" / f"{name}.jsonl", out_dir / "outputs" / f"{name}.stats.json"
@@ -74,6 +78,9 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None]
         todo = [e for e in episodes if e["episode_id"] not in done]
         stats = json.loads(stats_path.read_text()) if stats_path.is_file() else \
             {"episodes": 0, "generated_tokens": 0, "generate_seconds": 0.0, "generation_wall_s": 0.0}
+        source = cfg.get("notes_from", {}).get(name)
+        source = source if source in systems else None
+        prior = {r["episode_id"]: r for r in _load(out_dir / "outputs" / f"{source}.jsonl")} if source else {}
         for start in range(0, len(todo), size):
             if time.time() - t0 > budget:
                 summary["stopped_by_time_budget"] = True
@@ -81,14 +88,16 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None]
             if gen is None:
                 from src.infer.generator import VLLMGenerator
 
-                gen = VLLMGenerator(cfg["base_model"], max_lora_rank=16 if any(systems.values()) else 0,
+                gen = VLLMGenerator(cfg["base_model"], tensor_parallel_size=gpus,
+                                    max_lora_rank=16 if any(systems.values()) else 0,
                                     max_model_len=g["max_model_len"], gpu_memory_utilization=g["gpu_memory_utilization"],
                                     temperature=g["temperature"], top_p=g["top_p"], top_k=g["top_k"])
             batch = todo[start:start + size]
             gen.use_adapter(name if adapter else None, adapter)
             gen.generated_tokens, gen.generate_seconds = 0, 0.0
             tb = time.time()
-            _append(out_path, pipeline.run(batch, gen, g["max_tokens"], g["notes_budget_tokens"]))
+            reuse = prior if source and all(e["episode_id"] in prior for e in batch) else None
+            _append(out_path, pipeline.run(batch, gen, g["max_tokens"], g["notes_budget_tokens"], notes_from=reuse))
             stats = {"episodes": stats["episodes"] + len(batch),
                      "generated_tokens": stats["generated_tokens"] + gen.generated_tokens,
                      "generate_seconds": stats["generate_seconds"] + gen.generate_seconds,
@@ -108,11 +117,12 @@ def run(data_dir: Path, out_dir: Path, cfg: dict, systems: dict[str, str | None]
 
                 from src.eval.faithfulness import NLIScorer
 
-                device = "cuda:1" if torch.cuda.device_count() > 1 else "cuda:0"  # vLLM holds GPU 0
-                scorer = NLIScorer(cfg["faithfulness"]["nli_model"], device=device)
+                device = "cuda:1" if torch.cuda.device_count() > 1 else "cuda:0"
+                scorer = NLIScorer(cfg["faithfulness"]["nli_model"], device=device,
+                                   batch_size=cfg["faithfulness"].get("batch_size", 32))
             rows = [score_episode(r, chunks[r["episode_id"]], scorer) for r in results]
             write_jsonl(score_path, rows)
-        summary["systems"][name] = aggregate(rows, gen_stats(stats))
+        summary["systems"][name] = aggregate(rows, gen_stats(stats, gpus, source))
         print(f"[eval] {name}: {json.dumps(summary['systems'][name])}", flush=True)
     (out_dir / "results.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary

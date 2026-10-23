@@ -15,7 +15,7 @@ api_models:
   google/gemini-3.8-flash:     {input: 0.825, output: 4.125}
   deepseek/deepseek-v4-pro:    {input: 0.407, output: 0.814}
 
-# Self-hosted: measured seconds per episode on ONE T4 x hourly price.
+# Self-hosted: measured T4-seconds per episode (wall time x T4s used) x ONE T4's hourly price.
 self_hosted_usd_per_hour:
   kaggle_t4_free_tier: 0.0     # 30 GPU-h/week at no charge
   aws_g4dn_xlarge: 0.526       # 1x T4, 4 vCPU, 16 GiB, on-demand (instances.vantage.sh, updated 2026-10-21)

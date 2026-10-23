@@ -99,7 +99,7 @@ The pipeline stops on any failure it can't fix itself (an acceptance check, an e
 
 Note: environment variables are visible to anyone who can edit that environment. That's fine for a personal account; never share the environment.
 
-### Step 6 · Phase 5: SFT — ⏳ running
+### Step 6 · Phase 5: SFT — ✅ trained (eval pending)
 🤖 **Prompt:**
 > Do Phase 5. Run SFT in SMOKE mode, show me the loss curve, then run the full SFT on Kaggle with checkpointing. When done, run eval on the SFT adapter and add the SFT row to results.md. Update runs/state.json and commit.
 
@@ -110,17 +110,21 @@ Note: environment variables are visible to anyone who can edit that environment.
 
 ## Part 3 — DPO, report, demo (☁️ or 💻)
 
-### Step 7 · Phase 6: DPO — ⏳
+### Step 7 · Phase 6: DPO — ✅ trained (eval pending)
 🤖 **Prompt:**
 > Do Phase 6: build the DPO preference set (spec §4.4) using the SFT adapter's failures plus synthetic rejected answers, then run DPO from the SFT adapter (SMOKE first). Evaluate and add the SFT+DPO row to results.md.
 
 ✅ **Done when:** fewer hallucinated entities than SFT and no drop in SEO score.
 
-### Step 8 · Phase 7: Final eval + report — ⏳
+*(Trained 2026-10-22: 36/36 steps on 285 pairs, val reward accuracy 100%, margin 3.06. The first full run hit the 3 h cap while sampling the SFT model; the sampling now covers only the prompts that use an SFT failure, under a 1 h budget (D35). 61% of the rejected answers are injected hallucinations, so the high reward accuracy may reflect easy pairs; the eval decides.)*
+
+### Step 8 · Phase 7: Final eval + report — ⏳ next
 🤖 **Prompt:**
 > Do Phase 7: full eval of base, SFT, and SFT+DPO (plus the teacher as upper bound if budget allows). Add the LLM-judge win rates, cost/latency per episode, and 3 side-by-side example articles to reports/results.md. Write the headline result sentence from spec §1 with real numbers.
 
-*(The judge is kernel `06_judge`. The cost per article is a **free estimate**, not a paid API call: measured tokens × published API prices, compared with one T4 at $0.526/h. See spec §6.)*
+*(The judge is kernel `06_judge`. The cost per article is a **free estimate**, not a paid API call: measured tokens × published API prices, compared with T4-seconds at $0.526 per T4-hour. See spec §6.)*
+
+*(How the eval runs: generation on both T4s with tensor parallel; SFT+DPO writes from SFT's Stage A notes, since DPO trained on Stage B only (D38); 8 episodes per batch, saved after each, no new batch after 2 h, and `pipeline` resumes it automatically (D37). Estimated ~5–5.5 GPU-hours, down from ~15 on one T4 with every system running Stage A. Start with `python3 scripts/kaggle_run.py pipeline --full --from 05_eval --skip 06_judge`; it runs the smoke version first.)*
 
 ### Step 9 · Phase 8: Demo — ✅ built
 🤖 **Prompt:**
@@ -140,8 +144,8 @@ Note: environment variables are visible to anyone who can edit that environment.
 |---|---|---|
 | Smoke tests, transcription | ~1.5 | 2.9 (all smoke runs: 2.8; full transcription: 0.1) |
 | Teacher gen (option 1), baseline, SFT | ~4–10 | teacher 6.1 (full, incl. 2 automatic resumes); SFT 2.8 (full, 1 resume) |
-| DPO, final eval, judge | ~4 | DPO full v1: 3.0, no output (hit the 3 h cap while sampling, D35) |
-| **Total** | **~10–16** | **14.8 so far**; ~16 more estimated (DPO ~2, full eval ~14 over ~6 resumed runs, judge; D37) |
+| DPO, final eval, judge | ~4 | DPO 5.7 (v1: 3.0, no output, hit the 3 h cap while sampling, D35; v2: 2.7, complete) |
+| **Total** | **~10–16** | **17.5 so far**; ~6–7 more estimated (eval smoke ~0.5, full eval ~5–5.5 on 2 T4s, judge; D38) |
 
 Check `python3 scripts/kaggle_run.py quota` (or the Kaggle settings page) before starting a big run.
 
