@@ -1,0 +1,41 @@
+# The website (app/gradio_app.py) on Cloud Run without a GPU: the Mac set-up (README, "Run it on
+# a Mac") in a container. llama.cpp serves the 4-bit base model with the SFT + DPO adapter as GGUF;
+# faster-whisper `small` transcribes on the CPU. Built by deploy/cloudrun/deploy.sh (MODE=cpu), which
+# stages app/, src/, configs/ and models/pod2post-*-lora-*.gguf as the build context.
+#
+# llama.cpp build 11669 is the version that converted the adapter (and runs it on the Mac).
+FROM ghcr.io/ggml-org/llama.cpp:server-b11669
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir \
+      gradio==6.30.0 faster-whisper==1.2.1 av==18.1.0 yt-dlp==2026.10.21 textstat==0.7.13 spacy==3.8.16 \
+      pyyaml requests tokenizers huggingface_hub \
+      https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+
+# llama-server finds its libraries (in /app) only from /app; the image's default port is the site's.
+ENV PATH=/opt/venv/bin:/app:$PATH \
+    LD_LIBRARY_PATH=/app \
+    LLAMA_ARG_HOST=127.0.0.1 \
+    LLAMA_ARG_PORT=8089 \
+    HF_HOME=/models/hf \
+    PYTHONUNBUFFERED=1 \
+    GRADIO_ANALYTICS_ENABLED=False \
+    GRADIO_SERVER_NAME=0.0.0.0 \
+    GRADIO_SERVER_PORT=8080
+
+WORKDIR /srv/pod2post
+# Weights inside the image: Cloud Run's writable disk is RAM. The base GGUF is pinned and checked.
+COPY fetch_cpu_models.py /tmp/
+RUN python3 /tmp/fetch_cpu_models.py && rm /tmp/fetch_cpu_models.py
+ENV HF_HUB_OFFLINE=1
+
+COPY models/ models/
+COPY configs/ configs/
+COPY src/ src/
+COPY app/ app/
+
+ENTRYPOINT []
+# Threads match --cpu in deploy.sh (a container sees the host's core count). --max-minutes keeps an
+# episode inside Cloud Run's 60-minute request limit at CPU speed; --daily-limit caps the bill.
+CMD ["sh", "-c", "exec python3 app/gradio_app.py --backend llamacpp --asr-model small --daily-limit ${DAILY_LIMIT:-20} --max-minutes ${MAX_MINUTES:-30}"]

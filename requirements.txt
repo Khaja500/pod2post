@@ -9,4 +9,7 @@ jiwer>=4.0
 spacy>=3.8              # + python -m spacy download en_core_web_sm (filtering NER)
 datasketch>=1.6
 textstat==0.7.13
-gradio>=5              # demo only (app/gradio_app.py)
+gradio>=5              # website only (app/gradio_app.py)
+faster-whisper==1.2.1  # website: audio and podcast links -> transcript
+av==18.1.0             # PyAV 19 removed open(metadata_errors=), which faster-whisper 1.2.1 passes
+yt-dlp                 # website: episode pages (YouTube, SoundCloud, Apple Podcasts, ...)

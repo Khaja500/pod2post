@@ -49,6 +49,8 @@ DATASETS = {  # name -> (Kaggle slug, local folder, files; None = every file in 
     "data": ("pod2post-data", "data/processed", None),
     "data-smoke": ("pod2post-data-smoke", "data/smoke", None),  # smoke runs never touch the real dataset
     "audio": ("pod2post-audio", "data/raw/audio", None),
+    # trained adapters for inference-only runs (07_infer), staged flat by scripts/kaggle_infer.py
+    "adapters": ("pod2post-adapters", "models/kaggle-adapters", None),
 }
 BASE_DATA_FILES = ["episodes.jsonl", "chunks.jsonl", "test_ids.sha256"]
 LOCAL_PY = str(REPO / ".venv" / "bin" / "python") if (REPO / ".venv" / "bin" / "python").is_file() else sys.executable

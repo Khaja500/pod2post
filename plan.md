@@ -132,11 +132,13 @@ Note: environment variables are visible to anyone who can edit that environment.
 
 *(Done 2026-10-23: `reports/results.md` from `05_eval-v4` and `06_judge-v1`. The judge prefers base: SFT wins 12% and loses 48% of episodes, SFT + DPO 14% / 52%. An ablation, SFT writing from base's notes, shows the faithfulness loss is in the article writer, not the notes: −6.4 points vs base on the same notes (D41).)*
 
-### Step 9 · Phase 8: Demo — ✅ built
+### Step 9 · Phase 8: Demo — ✅ built and public (2026-10-24)
 🤖 **Prompt:**
 > Do Phase 8: Gradio app per spec §10. It should accept a pasted transcript or a short audio file and return the article and social pack, plus the faithfulness and SEO scores. Add run instructions to the README for both Kaggle and local.
 
 🧑 **Test it** on 2–3 CC episodes that aren't in any dataset. Screenshot good outputs for your README/portfolio. *(This becomes possible once the DPO adapter exists. The README covers both the Kaggle and local commands.)*
+
+*(Done 2026-10-24. Tested on real links: on the Mac with llama.cpp (a 48-min episode in 47 min), on Cloud Run's CPUs (8.5 min of audio in 14.5 min), and on Kaggle's GPUs with the trained adapters (`07_infer`: the same 48-min episode in 81 s of transcription + 3.3 min of writing, after ~11 min of start-up; 12.3 min from upload to article after D44's start-up cuts). The public Cloud Run site is a front end that sends every link, upload or transcript to Kaggle (D42–D44).)*
 
 ### Step 10 · Stretch (only if quota remains)
 - ORPO vs SFT+DPO comparison
@@ -151,7 +153,8 @@ Note: environment variables are visible to anyone who can edit that environment.
 | Smoke tests, transcription | ~1.5 | 1.4 (smoke runs of 00–03: 1.3; full transcription: 0.1; later smoke runs are in the rows below) |
 | Teacher gen (option 1), baseline, SFT | ~4–10 | teacher 6.1 (full, incl. 2 automatic resumes); SFT 2.8 (full, 1 resume) |
 | DPO, final eval, judge | ~4 | DPO 8.3 full (v1: 3.0, no output, hit the 3 h cap while sampling, D35; v2: 2.7; v3: 1.5, D39; v4: 1.0, D40) + 2.1 smoke; eval 4.7 full (3.6 first eval, D38; 1.2 re-evals, D40–D41) + 1.7 smoke; judge 1.05 + 0.2 smoke |
-| **Total** | **~10–16** | **27.9** (Kaggle's counter; the local log says 28.3). GPU work is finished |
+| **Total** | **~10–16** | **27.9** (Kaggle's counter; the local log says 28.3). Building the models is finished |
+| Website inference (`07_infer`, from 2026-10-24) | outside the build budget | 0.27 for the first 2 episodes; 0.18 per uploaded 48-min episode after D44; `07_deps` 0.1 CPU-hours (no GPU). Each run is logged in `runs/quota_log.csv` |
 
 Check `python3 scripts/kaggle_run.py quota` (or the Kaggle settings page) before starting a big run.
 

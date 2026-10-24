@@ -1,6 +1,18 @@
 {
   "artifacts": {
     "datasets": {
+      "adapters": {
+        "content_hash": "57e6c0225f65",
+        "files": [
+          "sft-dpo__adapter_config.json",
+          "sft-dpo__adapter_model.safetensors",
+          "sft__adapter_config.json",
+          "sft__adapter_model.safetensors"
+        ],
+        "id": "khajaaflal/pod2post-adapters",
+        "private": true,
+        "uploaded_at": "2026-10-24T11:57:29+00:00"
+      },
       "audio": {
         "content_hash": "44e66d0bbdd0",
         "files": [
@@ -237,6 +249,33 @@
       "mode": "smoke",
       "pulled_to": "runs/2026-10-23/06_judge-smoke-v1",
       "pushed_at": "2026-10-23T11:04:26+00:00",
+      "resume": false,
+      "status": "complete",
+      "version": 1
+    },
+    "pod2post-07-deps": {
+      "code_hash": "afa3c1358a77",
+      "finished_at": "2026-10-24T13:17:54+00:00",
+      "kernel": "07_deps",
+      "logged": true,
+      "mode": "full",
+      "pushed_at": "2026-10-24T13:08:28+00:00",
+      "resume": false,
+      "status": "complete",
+      "version": 1
+    },
+    "pod2post-07-infer": {
+      "code_hash": "d93e073ee7ff",
+      "finished_at": "2026-10-24T12:15:34+00:00",
+      "jobs": [
+        "j1",
+        "j2"
+      ],
+      "kernel": "07_infer",
+      "logged": true,
+      "mode": "full",
+      "pulled_to": "runs/2026-10-24/07_infer-v1",
+      "pushed_at": "2026-10-24T11:58:25+00:00",
       "resume": false,
       "status": "complete",
       "version": 1

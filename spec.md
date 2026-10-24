@@ -297,7 +297,7 @@ pod2post/
 
 ## 9. Phases & acceptance criteria
 
-| Phase | Deliverable | Done when | GPU budget | Status (2026-10-23) |
+| Phase | Deliverable | Done when | GPU budget | Status (2026-10-24) |
 |---|---|---|---|---|
 | 0. Setup | Repo, .gitignore, Kaggle CLI verified, `kaggle_run.py`, smoke kernel | `pipeline` works end-to-end in SMOKE mode | < 0.5 h | ✅ Done. Smoke pipeline green 01 → 05 |
 | 1. Data | Downloads, held-out test split, chunking, SOURCES.md | 50 test episodes frozen; chunker unit tests pass | 0 h | ✅ Done |
@@ -307,17 +307,20 @@ pod2post/
 | 5. SFT | LoRA adapter | Beats baseline on faithfulness and SEO score | ~2–3 h | ❌ Trained (2 epochs, val loss 0.370 → 0.345, 2.8 h) but **fails**: SEO 97.8% (base 80.5%), faithfulness 38.6% (base 43.5%; 95% CI of the gap −8.5 to −1.3 points), Flesch 29.7. Fewer articles invent anything (26% vs 44%) |
 | 6. DPO | DPO adapter | Fewer hallucinated entities than SFT, no SEO regression | ~2 h | ❌ **Fails** after 3 runs. Run 1 (285 pairs, 93% synthetic, D35) and run 3 (70 on-policy scored pairs, 3 epochs, D39–D40) are both within noise of SFT: run 3 has 0.42 vs 0.42 invented entities, faithfulness 39.1% vs 38.6% (CI of the gap −2.9 to +3.9), SEO 96.5% vs 97.8%. On MediaSum, SFT is already almost as faithful as the teacher (51.2% vs 53.8%) |
 | 7. Eval + report | Full table, examples, cost/latency, judge | `reports/results.md` complete | ~6 h | ✅ Done (2026-10-23). Full eval 3.6 h + re-evals 1.2 h (D38–D41); judge 1.05 h: base beats SFT 48% / SFT + DPO 52% of episodes, the systems win 12% / 14%. Ablation (D41): with base's notes, SFT's writer is 6.4 points less faithful than base's (CI −10.6 to −2.5), so the loss is in the article style |
-| 8. Demo | Gradio app | Paste transcript or upload short audio → article + social | 0 h | ✅ Built (`app/gradio_app.py`); needs the trained adapter |
+| 8. Demo | Gradio website | Podcast link, audio file or transcript → article + social | 0 h | ✅ Built and public (`app/gradio_app.py`, 2026-10-23/24): direct audio links, RSS feeds and episode pages (yt-dlp) via `src/asr/url_audio.py`, faster-whisper transcription, `.md` download. Runs on a Mac (llama.cpp, 4-bit GGUF + adapter; 48-min episode in 47 min), and on Kaggle's GPUs with the trained adapters (`07_infer`, D43; 48-min episode uploaded to the public site → article in 12.3 min, D44). Public on Cloud Run as a front end that sends every job to Kaggle (D42–D44) |
 
-GPU used: 27.9 h of the 30 h budget (Kaggle's counter, 2026-10-23). GPU work is finished; the 2.1 h left cannot pay for new teacher targets and an SFT retrain (~10 h), the likely fix (D41).
+GPU used: 27.9 h of the 30 h budget (Kaggle's counter, 2026-10-23). Building the models is finished; the 2.1 h left cannot pay for new teacher targets and an SFT retrain (~10 h), the likely fix (D41). Since 2026-10-24 the website writes articles on Kaggle (`07_infer`, D43); those runs are inference from the weekly quota, outside the 30 h build budget, and are logged in `runs/quota_log.csv`.
 
 ---
 
 ## 10. Demo / where to test
 
 - **Primary:** the `05_eval` kernel generates outputs for all test episodes, and `06_judge` compares them. Review them in `runs/` and `reports/results.md`.
-- **Interactive demo:** `app/gradio_app.py` loads the base model + LoRA adapter and runs the same pipeline that was evaluated.
-  - On Kaggle (GPU, vLLM): `--adapter /kaggle/input/pod2post-04-dpo/adapter --share`.
+- **Interactive demo:** `app/gradio_app.py` loads the base model + LoRA adapter and runs the same pipeline that was evaluated (`src/infer/article.py`).
+  - Public: the Cloud Run site (`deploy/cloudrun/deploy.sh`, `MODE=kaggle`); every article runs on the owner's Kaggle GPUs (D43).
+  - Mac: `python3 app/gradio_app.py` (llama.cpp; add `--kaggle` for the Kaggle GPU models).
+  - Kaggle notebook (GPU, vLLM): `--adapter /kaggle/input/pod2post-04-dpo/adapter --share`.
+  - Batch, from a terminal: `python3 scripts/kaggle_infer.py run --url <link> ...`.
   - Locally: `--backend hf` (transformers, CPU or Apple GPU; slow).
   - Optionally publish to a Hugging Face Space with a GGUF of the merged model.
 - **Real-world test:** the full pipeline runs on the CC episodes transcribed in Phase 2, which are not in any dataset.

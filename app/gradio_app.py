@@ -1,18 +1,27 @@
-"""Phase 8 demo: paste a transcript or upload short audio -> SEO article + social pack + scores.
+"""Phase 8 website: podcast URL, audio file or transcript -> SEO article + social pack + scores.
 
+  python app/gradio_app.py                                                          # Mac: llama.cpp + models/*.gguf
   python app/gradio_app.py --adapter runs/<date>/04_dpo-v<N>/adapter              # NVIDIA GPU (vLLM)
-  python app/gradio_app.py --adapter runs/<date>/04_dpo-v<N>/adapter --backend hf  # CPU / Apple GPU (slow)
-  python app/gradio_app.py --backend hf                                             # base model, no adapter
+  python app/gradio_app.py --adapter <sft+dpo>/adapter --adapter <sft>/adapter    # vLLM, with a model picker
+  python app/gradio_app.py --adapter runs/<date>/04_dpo-v<N>/adapter --backend hf  # transformers (slow)
+
+--backend auto (the default) picks vLLM on an NVIDIA GPU, else llama.cpp when llama-server and
+the 4-bit GGUF in models/ exist (README: "Run it on a Mac"), else transformers. With llama.cpp
+every models/*-lora-*.gguf adapter is loaded, and the page has a model picker.
 
 On Kaggle: in a GPU notebook with the 04_dpo output attached, run
   !python app/gradio_app.py --adapter /kaggle/input/pod2post-04-dpo/adapter --share
 and open the public link it prints. Generation uses exactly the pipeline that was evaluated
-(src/infer/pipeline.py), so the demo shows what the reported numbers measure.
+(src/infer/pipeline.py), so the site shows what the reported numbers measure.
+
+A podcast URL can be a direct audio link, an RSS feed (newest episode, or the one named in
+"Episode in feed") or an episode page yt-dlp can read (src/asr/url_audio.py). Audio is
+transcribed with faster-whisper: configs/asr.yaml's model on a GPU, --asr-model on CPU.
 """
 from __future__ import annotations
 
 import argparse
-import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -21,9 +30,8 @@ sys.path.insert(0, str(REPO))
 
 import yaml  # noqa: E402
 
-from src.data.chunk import chunk_episode  # noqa: E402
-from src.eval.seo import seo_checks, social_checks  # noqa: E402
-from src.infer import pipeline  # noqa: E402
+from src.infer.article import (  # noqa: E402,F401  (re-exported: the tests and the Kaggle backend use them)
+    Transcriber, generate, text_to_utterances, utterances_text)
 
 EVAL_CFG = yaml.safe_load((REPO / "configs" / "eval.yaml").read_text())
 DATA_CFG = yaml.safe_load((REPO / "configs" / "data.yaml").read_text())
@@ -62,108 +70,184 @@ class HFGenerator:
         return outs
 
 
-def make_generator(backend: str, adapter: str | None):
+MODELS = REPO / "models"
+BASE_GGUF = MODELS / "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
+BASE_LABEL = "Base Qwen3-4B (more faithful in our eval)"
+KAGGLE = "kaggle:"  # models value prefix: the job runs on Kaggle's GPUs (scripts/kaggle_infer.py)
+KAGGLE_MODELS = {"Kaggle GPU: SFT + DPO (fastest for long episodes)": KAGGLE + "sft_dpo",
+                 "Kaggle GPU: SFT": KAGGLE + "sft", "Kaggle GPU: base Qwen3-4B": KAGGLE + "base"}
+
+
+def adapter_label(path: str) -> str:
+    name = "/".join(Path(path).parts[-2:]).lower()  # trained adapters sit in .../04_dpo-v4/adapter
+    return "Fine-tuned: SFT + DPO (best SEO)" if "dpo" in name else "Fine-tuned: SFT" if "sft" in name \
+        else f"Adapter: {Path(path).stem}"
+
+
+def pick_backend(backend: str) -> str:
+    if backend != "auto":
+        return backend
+    if shutil.which("nvidia-smi"):
+        return "vllm"
+    return "llamacpp" if shutil.which("llama-server") and BASE_GGUF.is_file() else "hf"
+
+
+def make_generator(backend: str, adapters: list[str] | None, gguf: str | None = None,
+                   lora_ggufs: list[str] | None = None):
+    """Returns the generator and the models the page can switch between: {label: adapter path or None}."""
+    adapters = adapters or []
+    if backend == "kaggle":  # no model here: every job runs on Kaggle (a small server for the public site)
+        return None, dict(KAGGLE_MODELS)
     g = EVAL_CFG["generation"]
+    sampling = dict(temperature=g["temperature"], top_p=g["top_p"], top_k=g["top_k"])
+    if backend == "llamacpp":
+        from src.data.chunk import hf_token_counter
+        from src.infer.generator import LlamaCppGenerator
+
+        loras = lora_ggufs if lora_ggufs is not None else [str(p) for p in sorted(MODELS.glob("*-lora-*.gguf"))]
+        gen = LlamaCppGenerator(gguf or str(BASE_GGUF), loras, count=hf_token_counter(DATA_CFG["tokenizer"]),
+                                ctx=g["max_model_len"], **sampling)
+        models = {adapter_label(p): p for p in sorted(loras, key=lambda p: "dpo" not in p)} | {BASE_LABEL: None}
+        return gen, models
     if backend == "vllm":
         from src.infer.generator import VLLMGenerator
 
-        gen = VLLMGenerator(EVAL_CFG["base_model"], max_lora_rank=16 if adapter else 0,
+        gen = VLLMGenerator(EVAL_CFG["base_model"], max_lora_rank=16 if adapters else 0,
                             max_model_len=g["max_model_len"], gpu_memory_utilization=g["gpu_memory_utilization"],
-                            temperature=g["temperature"], top_p=g["top_p"], top_k=g["top_k"])
-        gen.use_adapter("demo" if adapter else None, adapter)
-        return gen
-    return HFGenerator(EVAL_CFG["base_model"], adapter, temperature=g["temperature"])
+                            **sampling)
+        return gen, {adapter_label(p): p for p in sorted(adapters, key=lambda p: "dpo" not in p)} | {BASE_LABEL: None}
+    adapter = adapters[0] if adapters else None
+    gen = HFGenerator(EVAL_CFG["base_model"], adapter, temperature=g["temperature"])
+    return gen, {adapter_label(adapter) if adapter else BASE_LABEL: "loaded"}  # one model, no switching
 
 
-def transcribe(audio_path: str) -> list[dict]:
-    from faster_whisper import WhisperModel
+def kaggle_generate(title: str, transcript: str, audio: str | None, keyword: str, url: str, episode: str,
+                    model: str, progress=None, runner=None) -> dict:
+    """One episode on Kaggle (07_infer): the same generate() on 2 T4s, ~10 min of start-up included.
+    An uploaded file goes to Kaggle as a private dataset first (scripts/kaggle_infer.py upload_audio)."""
+    url = (url or "").strip()
+    if not url and not audio and not (transcript or "").strip():
+        raise ValueError("Paste a podcast link, upload an audio file or paste a transcript first.")
+    if runner is None:
+        sys.path.insert(0, str(REPO / "scripts"))
+        from kaggle_infer import run_jobs as runner
+    job = {"id": "j1", "url": url, "episode": episode or "", "transcript": "" if url or audio else transcript,
+           "title": title or "", "keyword": keyword or "", "model": model}
+    if audio and not url:  # same priority as generate(): link, then file, then transcript
+        job["audio_path"] = audio
 
-    model = WhisperModel(yaml.safe_load((REPO / "configs" / "asr.yaml").read_text())["model"],
-                         device="auto", compute_type="default")
-    segments, _ = model.transcribe(audio_path, vad_filter=True)
-    return [{"speaker": None, "text": s.text.strip(), "start": round(s.start, 2)} for s in segments]
-
-
-def text_to_utterances(text: str) -> list[dict]:
-    """'Name: words' lines keep their speaker; anything else is one paragraph per line."""
-    utts = []
-    for line in (x.strip() for x in text.splitlines()):
-        if not line:
-            continue
-        name, sep, rest = line.partition(":")
-        if sep and 0 < len(name.split()) <= 4 and rest.strip():
-            utts.append({"speaker": name.strip(), "text": rest.strip(), "start": None})
-        else:
-            utts.append({"speaker": None, "text": line, "start": None})
-    return utts
-
-
-def generate(gen, title: str, transcript: str, audio: str | None, keyword: str) -> tuple[str, str, str, str]:
-    utterances = transcribe(audio) if audio else text_to_utterances(transcript or "")
-    if not utterances:
-        return "Paste a transcript or upload audio first.", "{}", "{}", ""
-    episode = {"episode_id": "demo", "split": "demo", "utterances": utterances}
-    chunks = [c["text"] for c in chunk_episode(episode, gen.count, DATA_CFG["chunk"]["max_tokens"],
-                                               DATA_CFG["chunk"]["overlap_tokens"])]
-    g = EVAL_CFG["generation"]
-    keywords = {"demo": (keyword.strip().lower(), [])} if keyword.strip() else None
-    [r] = pipeline.run([{"episode_id": "demo", "title": title or "Podcast episode", "chunks": chunks}], gen,
-                       g["max_tokens"], g["notes_budget_tokens"], keywords=keywords)
-    scores = {"primary_keyword": r["primary_keyword"], "chunks": len(chunks),
-              "seconds": r["seconds_per_episode"], "social": social_checks(r["social"])}
-    if r["article"]:
-        seo = seo_checks(r["article"], r["primary_keyword"])
-        scores["seo"] = {"score": seo["score"], "failed_checks": [k for k, v in seo["checks"].items() if not v],
-                         "words": seo["words"], "keyword_density": seo["density"]}
-        try:  # grounding needs spaCy's English model; skip quietly if it is not installed
-            from src.data.filter import checkable_text, grounded_entity, ner_entities, norm, ungrounded_numbers
-
-            src = norm("\n".join(chunks))
-            text = checkable_text(r["article"], r["social"])
-            scores["entities_not_in_transcript"] = [e for e in ner_entities(text) if not grounded_entity(e, src)]
-            scores["numbers_not_in_transcript"] = ungrounded_numbers(text, "\n".join(chunks))
-        except OSError:
-            pass
-    article = r["article"] or "*(the model did not produce a parseable article)*\n\n```\n" + r["output"][:3000] + "\n```"
-    return article, json.dumps(r["social"] or {}, indent=2, ensure_ascii=False), json.dumps(scores, indent=2), \
-        f"**Target keyword:** {r['primary_keyword']}\n\n```\n{r['notes_text']}\n```"
+    def on_status(status, elapsed_s):
+        if progress:
+            progress(min(0.9, 0.05 + elapsed_s / 1800), desc=f"Kaggle GPU: {status}, {elapsed_s / 60:.0f} min "
+                                                              "(start-up alone takes ~10 min)")
+    try:
+        res = runner([job], on_status)["j1"]
+    except SystemExit as e:  # kaggle_run.py's die() is meant for a terminal; here it must not stop the site
+        raise RuntimeError(f"Kaggle: {e}") from None
+    if "error" in res:
+        raise RuntimeError(f"Kaggle: {res['error']}")
+    return res
 
 
-def build_ui(gen):
+def build_ui(gen, transcriber=None, models: dict | None = None, daily_limit: int | None = None):
+    """daily_limit caps articles per UTC day, so a public site cannot run up the GPU bill."""
+    import datetime
+
     import gradio as gr
 
+    transcriber = transcriber or Transcriber()
+    models = models or {BASE_LABEL: "loaded"}
+    done_today = {}  # {date: articles started}; one entry per day the process has been up
     with gr.Blocks(title="pod2post") as ui:
-        gr.Markdown("# pod2post\nPodcast transcript → SEO article + social pack, with faithfulness and SEO checks.")
+        gr.Markdown("# pod2post\nPaste a podcast link or upload an episode, and get an SEO article and a social pack, "
+                    "with faithfulness and SEO checks. Only use audio you have the right to republish.")
         with gr.Row():
             with gr.Column():
-                title = gr.Textbox(label="Episode title", placeholder="e.g. Building drone delivery at Zipline")
-                keyword = gr.Textbox(label="Target keyword (optional; picked from the notes if empty)")
+                with gr.Tab("Podcast link"):
+                    url = gr.Textbox(label="Podcast URL", placeholder="https://… (.mp3 link, RSS feed or episode page)")
+                    episode = gr.Textbox(label="Episode in feed (optional)",
+                                         placeholder="part of the episode title; newest episode if empty")
+                with gr.Tab("Audio file"):
+                    audio = gr.File(label="Episode audio (mp3, m4a, wav, …)", file_types=["audio", "video"],
+                                    type="filepath")
                 with gr.Tab("Transcript"):
-                    transcript = gr.Textbox(label="Transcript", lines=16,
+                    transcript = gr.Textbox(label="Transcript", lines=14,
                                             placeholder="Speaker: text, one turn per line (or plain paragraphs)")
-                with gr.Tab("Audio"):
-                    audio = gr.Audio(label="Short audio clip", type="filepath")
-                go = gr.Button("Generate", variant="primary")
+                title = gr.Textbox(label="Episode title (optional; taken from the feed or page if empty)")
+                keyword = gr.Textbox(label="Target keyword (optional; picked from the notes if empty)")
+                model = gr.Dropdown(list(models), value=next(iter(models)), label="Model",
+                                    visible=len(models) > 1)
+                go = gr.Button("Create article", variant="primary")
+                gr.Markdown("If more than one input is filled in, the link is used first, then the file, "
+                            "then the transcript."
+                            + (" A *Kaggle GPU* article takes about 12-15 minutes, half of it Kaggle starting up; "
+                               "one article is written at a time." if any(str(v).startswith(KAGGLE)
+                                                                          for v in models.values()) else ""))
             with gr.Column():
                 with gr.Tab("Article"):
                     article = gr.Markdown()
+                    download = gr.File(label="Download article (.md)")
                 with gr.Tab("Social pack"):
                     social = gr.Code(language="json")
                 with gr.Tab("Scores"):
                     scores = gr.Code(language="json")
                 with gr.Tab("Episode notes"):
                     notes = gr.Markdown()
-        go.click(lambda *a: generate(gen, *a), [title, transcript, audio, keyword], [article, social, scores, notes])
+                with gr.Tab("Transcript used"):
+                    used = gr.Textbox(lines=16, show_label=False)
+
+        def run(title_, url_, episode_, audio_, transcript_, keyword_, model_, progress=gr.Progress()):
+            today = datetime.datetime.now(datetime.timezone.utc).date()
+            if daily_limit and done_today.get(today, 0) >= daily_limit:
+                raise gr.Error(f"This site's limit of {daily_limit} articles a day has been reached. "
+                               "Please try again tomorrow (UTC).")
+            done_today.update({today: done_today.get(today, 0) + 1})  # failed runs count too: they used the GPU
+            choice = models.get(model_)
+            try:
+                if isinstance(choice, str) and choice.startswith(KAGGLE):
+                    out = kaggle_generate(title_, transcript_, audio_, keyword_, url_, episode_,
+                                          choice[len(KAGGLE):], progress)
+                else:
+                    if choice != "loaded":  # the queue runs one request at a time, so switching is safe
+                        gen.use_adapter(model_ if choice else None, choice)
+                    out = generate(gen, title_, transcript_, audio_, keyword_, url=url_, episode=episode_,
+                                   transcriber=transcriber, progress=progress)
+            except (ValueError, RuntimeError) as e:
+                raise gr.Error(str(e)) from None
+            except Exception as e:  # network errors, undecodable audio, yt-dlp failures
+                raise gr.Error(f"{type(e).__name__}: {e}") from None
+            return out["article"], out["file"], out["social"], out["scores"], out["notes"], out["transcript"], \
+                out["title"]
+
+        go.click(run, [title, url, episode, audio, transcript, keyword, model],
+                 [article, download, social, scores, notes, used, title])
     return ui
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--adapter", help="LoRA adapter folder (03_sft or 04_dpo output /adapter)")
-    ap.add_argument("--backend", choices=["vllm", "hf"], default="vllm")
+    ap.add_argument("--adapter", action="append", help="vLLM / transformers: LoRA adapter folder (03_sft or 04_dpo "
+                                                        "output /adapter); repeat for a model picker (vLLM)")
+    ap.add_argument("--backend", choices=["auto", "vllm", "llamacpp", "hf", "kaggle"], default="auto",
+                    help="kaggle: no local model, every article is written on Kaggle's GPUs")
+    ap.add_argument("--gguf", help=f"llama.cpp: base model GGUF (default {BASE_GGUF.relative_to(REPO)})")
+    ap.add_argument("--lora-gguf", action="append", help="llama.cpp: adapter GGUF, repeatable "
+                                                          "(default: every models/*-lora-*.gguf)")
+    ap.add_argument("--asr-model", default="small", help="faster-whisper model when there is no GPU (default: small)")
+    ap.add_argument("--max-minutes", type=float, default=180, help="longest audio accepted")
+    ap.add_argument("--daily-limit", type=int, help="most articles per UTC day (a public site's cost cap)")
+    ap.add_argument("--kaggle", action="store_true", help="also offer the models on Kaggle's GPUs (needs the kaggle "
+                                                           "CLI signed in and `scripts/kaggle_infer.py adapters`)")
+    ap.add_argument("--max-file-mb", type=int, default=500, help="largest upload (Cloud Run: 32, its request limit)")
     ap.add_argument("--share", action="store_true", help="public Gradio link (needed on Kaggle)")
     args = ap.parse_args()
-    build_ui(make_generator(args.backend, args.adapter)).launch(share=args.share)
+    backend = pick_backend(args.backend)
+    print(f"[pod2post] backend: {backend}", flush=True)
+    gen, models = make_generator(backend, args.adapter, args.gguf, args.lora_gguf)
+    if args.kaggle and backend != "kaggle":
+        models = KAGGLE_MODELS | models
+    ui = build_ui(gen, Transcriber(args.asr_model, args.max_minutes), models, args.daily_limit)
+    ui.queue(default_concurrency_limit=1).launch(share=args.share, max_file_size=f"{args.max_file_mb}mb")
 
 
 if __name__ == "__main__":

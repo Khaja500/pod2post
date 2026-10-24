@@ -45,3 +45,5 @@ kernel,slug,mode,version,code_hash,pushed_at,finished_at,wall_hours,kernel_runti
 05_eval,pod2post-05-eval-smoke,smoke,6,2f994dacacd9,2026-10-23T14:17:14+00:00,2026-10-23T14:36:47+00:00,0.326,0.317,complete
 05_eval,pod2post-05-eval,full,4,2f994dacacd9,2026-10-23T14:37:26+00:00,2026-10-23T15:15:27+00:00,0.634,0.619,complete
 06_judge,pod2post-06-judge,full,1,63b8dee3f333,2026-10-23T15:16:34+00:00,2026-10-23T16:20:55+00:00,1.073,1.050,complete
+07_infer,pod2post-07-infer,full,1,d93e073ee7ff,2026-10-24T11:58:25+00:00,2026-10-24T12:15:34+00:00,0.286,0.274,complete
+07_deps,pod2post-07-deps,full,1,afa3c1358a77,2026-10-24T13:08:28+00:00,2026-10-24T13:17:54+00:00,0.157,0.095,complete
