@@ -114,3 +114,14 @@ def test_prebuilt_env_is_used_only_if_it_imports(tmp_path, monkeypatch):
 def test_vllm_engine_gets_the_short_cuda_graph_list():
     sizes = kaggle_jobs.ENGINE["compilation_config"]["cudagraph_capture_sizes"]
     assert max(sizes) == kaggle_jobs.ENGINE["max_num_seqs"] and sizes == sorted(sizes)
+
+
+def test_no_model_starts_when_every_link_failed(tmp_path):
+    out = tmp_path / "jobs"
+    (out / "j1").mkdir(parents=True)
+    (out / "j1" / "transcript.json").write_text(json.dumps({"error": "DownloadError: Sign in to confirm"}))
+    jobs = [{"id": "j1", "url": "https://www.youtube.com/watch?v=x", "model": "sft_dpo"}]
+    assert not kaggle_jobs.needs_model(jobs, out)
+    summary = kaggle_jobs.write_all(jobs, out, {}, {"generation": {}})  # would start vLLM if it tried
+    assert "Sign in" in summary["j1"]["error"]
+    assert kaggle_jobs.needs_model(jobs + [{"id": "j2", "transcript": TRANSCRIPT}], out)

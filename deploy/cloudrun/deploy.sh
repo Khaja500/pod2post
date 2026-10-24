@@ -56,17 +56,18 @@ fi
 
 secrets=()
 if [ "$MODE" = kaggle ]; then
-  # Waits on Kaggle; holds an upload (<= 32 MB) and a copy while it goes to Kaggle.
-  hardware=(--cpu 2 --memory 4Gi)
-  env="DAILY_LIMIT=${DAILY_LIMIT:-10},KAGGLE_USERNAME=${KAGGLE_USERNAME:?set KAGGLE_USERNAME}"
+  # Waits on Kaggle. Uploads (<= MAX_FILE_MB) sit in memory, Cloud Run's disk, while they go to Kaggle.
+  # HTTP/2 end to end lifts Cloud Run's 32 MB HTTP/1 request limit; the app serves it with Hypercorn.
+  hardware=(--cpu 2 --memory 8Gi --use-http2)
+  env="DAILY_LIMIT=${DAILY_LIMIT:-10},MAX_FILE_MB=${MAX_FILE_MB:-500},KAGGLE_USERNAME=${KAGGLE_USERNAME:?set KAGGLE_USERNAME}"
   secrets=(--set-secrets KAGGLE_API_TOKEN=kaggle-api-token:latest)
 elif [ "$MODE" = cpu ]; then
   # 8 vCPUs is Cloud Run's most without a GPU. Threads are pinned because a container sees the host's
   # cores; 4 (one per physical core) beat 8 by ~20% on the same transcript (443 s vs 552 s).
-  hardware=(--cpu 8 --memory 16Gi)
+  hardware=(--cpu 8 --memory 16Gi --no-use-http2)
   env="DAILY_LIMIT=${DAILY_LIMIT:-20},MAX_MINUTES=${MAX_MINUTES:-30},LLAMA_ARG_THREADS=4,OMP_NUM_THREADS=4"
 else
-  hardware=(--gpu 1 --gpu-type nvidia-l4 --no-gpu-zonal-redundancy --cpu 8 --memory 32Gi)
+  hardware=(--gpu 1 --gpu-type nvidia-l4 --no-gpu-zonal-redundancy --cpu 8 --memory 32Gi --no-use-http2)
   env="DAILY_LIMIT=${DAILY_LIMIT:-25},MAX_MINUTES=${MAX_MINUTES:-120}"
 fi
 gcloud run deploy "$SERVICE" --project "$PROJECT" --region "$REGION" --image "$IMAGE" "${hardware[@]}" \

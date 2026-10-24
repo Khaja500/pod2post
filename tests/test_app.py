@@ -107,3 +107,14 @@ def test_a_kaggle_driver_exit_becomes_an_error_not_a_crash():
 
     with pytest.raises(RuntimeError, match="unknown kernel"):
         gradio_app.kaggle_generate("", TRANSCRIPT, None, "", "", "", "base", runner=runner)
+
+
+def test_youtube_links_are_refused_before_a_kaggle_run_starts():
+    def runner(jobs, on_status):
+        raise AssertionError("no Kaggle run for a link that cannot be downloaded there")
+
+    for url in ("https://www.youtube.com/watch?v=QigAo0NKUIM", "https://youtu.be/QigAo0NKUIM",
+                "https://m.youtube.com/watch?v=x"):
+        with pytest.raises(ValueError, match="YouTube blocks downloads"):
+            gradio_app.kaggle_generate("", "", None, "", url, "", "sft_dpo", runner=runner)
+    assert not gradio_app.BLOCKED_ON_KAGGLE.match("https://notyoutube.com/feed")

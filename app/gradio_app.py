@@ -21,6 +21,8 @@ transcribed with faster-whisper: configs/asr.yaml's model on a GPU, --asr-model 
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -74,6 +76,9 @@ MODELS = REPO / "models"
 BASE_GGUF = MODELS / "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 BASE_LABEL = "Base Qwen3-4B (more faithful in our eval)"
 KAGGLE = "kaggle:"  # models value prefix: the job runs on Kaggle's GPUs (scripts/kaggle_infer.py)
+# YouTube asks data-centre machines (Kaggle, Cloud Run) to "sign in to confirm you're not a bot", so
+# yt-dlp cannot download there (07_infer-v5); a Kaggle job with such a link would fail after its start-up.
+BLOCKED_ON_KAGGLE = re.compile(r"^https?://([a-z0-9-]+\.)*(youtube\.com|youtu\.be)(/|$)", re.I)
 KAGGLE_MODELS = {"Kaggle GPU: SFT + DPO (fastest for long episodes)": KAGGLE + "sft_dpo",
                  "Kaggle GPU: SFT": KAGGLE + "sft", "Kaggle GPU: base Qwen3-4B": KAGGLE + "base"}
 
@@ -128,6 +133,10 @@ def kaggle_generate(title: str, transcript: str, audio: str | None, keyword: str
     url = (url or "").strip()
     if not url and not audio and not (transcript or "").strip():
         raise ValueError("Paste a podcast link, upload an audio file or paste a transcript first.")
+    if BLOCKED_ON_KAGGLE.match(url):
+        raise ValueError("YouTube blocks downloads from cloud servers, so this link cannot be fetched. Download the "
+                         "episode's audio and upload it in the Audio file tab, or paste the podcast's RSS feed or "
+                         "mp3 link instead.")
     if runner is None:
         sys.path.insert(0, str(REPO / "scripts"))
         from kaggle_infer import run_jobs as runner
@@ -224,6 +233,24 @@ def build_ui(gen, transcriber=None, models: dict | None = None, daily_limit: int
     return ui
 
 
+def serve_http2(ui, port: int, max_file_mb: int) -> None:
+    """Serve over cleartext HTTP/2 with Hypercorn. Cloud Run caps HTTP/1 requests at 32 MB (one upload is
+    one request) but not HTTP/2 ones (`--use-http2` in deploy.sh), and uvicorn, Gradio's own server, speaks
+    HTTP/1 only."""
+    import asyncio
+
+    import gradio as gr
+    from fastapi import FastAPI
+    from hypercorn.asyncio import serve
+    from hypercorn.config import Config
+
+    app = gr.mount_gradio_app(FastAPI(), ui, path="/", max_file_size=f"{max_file_mb}mb")
+    config = Config()
+    config.bind = [f"0.0.0.0:{port}"]
+    print(f"[pod2post] serving HTTP/2 (h2c) on port {port}", flush=True)
+    asyncio.run(serve(app, config))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--adapter", action="append", help="vLLM / transformers: LoRA adapter folder (03_sft or 04_dpo "
@@ -238,7 +265,9 @@ def main() -> None:
     ap.add_argument("--daily-limit", type=int, help="most articles per UTC day (a public site's cost cap)")
     ap.add_argument("--kaggle", action="store_true", help="also offer the models on Kaggle's GPUs (needs the kaggle "
                                                            "CLI signed in and `scripts/kaggle_infer.py adapters`)")
-    ap.add_argument("--max-file-mb", type=int, default=500, help="largest upload (Cloud Run: 32, its request limit)")
+    ap.add_argument("--max-file-mb", type=int, default=500, help="largest upload (Cloud Run over HTTP/1: 32)")
+    ap.add_argument("--http2", action="store_true", help="serve HTTP/2 with Hypercorn on $PORT (Cloud Run "
+                                                          "--use-http2: no 32 MB upload limit)")
     ap.add_argument("--share", action="store_true", help="public Gradio link (needed on Kaggle)")
     args = ap.parse_args()
     backend = pick_backend(args.backend)
@@ -247,7 +276,11 @@ def main() -> None:
     if args.kaggle and backend != "kaggle":
         models = KAGGLE_MODELS | models
     ui = build_ui(gen, Transcriber(args.asr_model, args.max_minutes), models, args.daily_limit)
-    ui.queue(default_concurrency_limit=1).launch(share=args.share, max_file_size=f"{args.max_file_mb}mb")
+    ui.queue(default_concurrency_limit=1)
+    if args.http2:
+        serve_http2(ui, int(os.environ.get("PORT", 8080)), args.max_file_mb)
+    else:
+        ui.launch(share=args.share, max_file_size=f"{args.max_file_mb}mb")
 
 
 if __name__ == "__main__":

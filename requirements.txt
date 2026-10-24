@@ -13,3 +13,4 @@ gradio>=5              # website only (app/gradio_app.py)
 faster-whisper==1.2.1  # website: audio and podcast links -> transcript
 av==18.1.0             # PyAV 19 removed open(metadata_errors=), which faster-whisper 1.2.1 passes
 yt-dlp                 # website: episode pages (YouTube, SoundCloud, Apple Podcasts, ...)
+hypercorn==0.17.3     # website on Cloud Run: HTTP/2, so uploads are not capped at 32 MB

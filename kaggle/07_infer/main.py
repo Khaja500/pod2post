@@ -37,15 +37,17 @@ from src.infer import kaggle_jobs
 # Kaggle's torchaudio is built for its own torch's CUDA and breaks vllm's (see 02_teacher_gen); transformers
 # imports it whenever it is installed. Removed before 07_deps' packages go on the path: with them on
 # PYTHONPATH the uninstall did not take effect (07_infer-v3).
-K.pip_uninstall(["torchaudio"])
-if K.ON_KAGGLE:
-    import importlib.util
+# Every job failed to download? Then report that now instead of starting vLLM (~5 min).
+if kaggle_jobs.needs_model(JOBS, K.WORKING / "jobs"):
+    K.pip_uninstall(["torchaudio"])
+    if K.ON_KAGGLE:
+        import importlib.util
 
-    assert importlib.util.find_spec("torchaudio") is None, "torchaudio is still installed"
-# vLLM from 07_deps' tar (~2 min faster than pip); pip if it is not attached or does not import.
-deps = next(Path(K.INPUT).rglob(kaggle_jobs.ENV_TAR), None) if K.ON_KAGGLE else None
-if not kaggle_jobs.use_prebuilt_env(deps):
-    K.install_requirements(BUNDLE_DIR / "requirements-kaggle.txt", only=kaggle_jobs.ENV_PACKAGES)
+        assert importlib.util.find_spec("torchaudio") is None, "torchaudio is still installed"
+    # vLLM from 07_deps' tar (~2 min faster than pip); pip if it is not attached or does not import.
+    deps = next(Path(K.INPUT).rglob(kaggle_jobs.ENV_TAR), None) if K.ON_KAGGLE else None
+    if not kaggle_jobs.use_prebuilt_env(deps):
+        K.install_requirements(BUNDLE_DIR / "requirements-kaggle.txt", only=kaggle_jobs.ENV_PACKAGES)
 
 # %%
 import yaml

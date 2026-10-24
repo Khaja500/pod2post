@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import time
@@ -62,7 +63,10 @@ def upload_audio(jobs: list[dict]) -> None:
     for job in jobs:
         src = Path(job.pop("audio_path"))
         job["audio"] = f"{uuid.uuid4().hex[:12]}{src.suffix.lower() or '.mp3'}"  # unique: proves the version
-        shutil.copyfile(src, stage / job["audio"])
+        try:  # a hard link: on Cloud Run the disk is memory, and uploads can be hundreds of MB
+            os.link(src, stage / job["audio"])
+        except OSError:
+            shutil.copyfile(src, stage / job["audio"])
     ref = f"{kr.username()}/{UPLOADS}"
     (stage / "dataset-metadata.json").write_text(json.dumps(
         {"title": UPLOADS, "id": ref, "licenses": [{"name": "other"}]}), encoding="utf-8")

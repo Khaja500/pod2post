@@ -3,7 +3,7 @@
 # trained adapters (scripts/kaggle_infer.py); the kaggle CLI authenticates from the KAGGLE_API_TOKEN secret.
 FROM python:3.12-slim
 
-RUN pip install --no-cache-dir gradio==6.30.0 kaggle==2.2.4 pyyaml requests
+RUN pip install --no-cache-dir gradio==6.30.0 kaggle==2.2.4 hypercorn==0.17.3 pyyaml requests
 
 ENV PYTHONUNBUFFERED=1 \
     GRADIO_ANALYTICS_ENABLED=False \
@@ -21,5 +21,5 @@ COPY kaggle/07_deps/ kaggle/07_deps/
 COPY scripts/build_notebook.py scripts/kaggle_run.py scripts/kaggle_infer.py scripts/
 COPY app/ app/
 
-# 32 MB: Cloud Run's HTTP/1 request limit; longer episodes can be pasted as links.
-CMD ["sh", "-c", "exec python3 app/gradio_app.py --backend kaggle --max-file-mb 32 --daily-limit ${DAILY_LIMIT:-10}"]
+# HTTP/2 (Hypercorn; the service runs with --use-http2): Cloud Run's 32 MB request limit is HTTP/1's only.
+CMD ["sh", "-c", "exec python3 app/gradio_app.py --backend kaggle --http2 --max-file-mb ${MAX_FILE_MB:-500} --daily-limit ${DAILY_LIMIT:-10}"]

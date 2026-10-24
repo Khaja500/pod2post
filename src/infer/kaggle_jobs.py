@@ -94,11 +94,22 @@ def unpack_adapters(src: Path, dest: Path) -> dict[str, str]:
     return paths
 
 
+def stage_one_error(job: dict, out: Path) -> str | None:
+    path = out / job["id"] / "transcript.json"
+    return json.loads(path.read_text(encoding="utf-8")).get("error") if path.is_file() else None
+
+
+def needs_model(jobs: list[dict], out: Path) -> bool:
+    """False when every job already failed in stage 1 (a bad link): skip vLLM's ~5 min start-up."""
+    return any(stage_one_error(j, out) is None for j in jobs)
+
+
 def write_all(jobs: list[dict], out: Path, adapters: dict[str, str], cfg: dict, gen=None) -> dict:
-    """Generate every job's article; returns {id: {"ok", "seconds" | "error"}}."""
+    """Generate every job's article; returns {id: {"ok", "seconds" | "error"}}. vLLM starts only if some
+    job got past stage 1."""
     from src.infer.article import generate
 
-    if gen is None:
+    if gen is None and needs_model(jobs, out):
         from src.infer.generator import VLLMGenerator
 
         g = cfg["generation"]
