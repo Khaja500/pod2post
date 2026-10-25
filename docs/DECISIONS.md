@@ -224,3 +224,10 @@ Also: one public test (`07_infer-v2`) hung for 55 minutes and was cancelled by h
 - **Fast failure.** When every job in a run failed to download, `07_infer` now reports that right after stage 1 instead of unpacking and starting vLLM (~5 min).
 
 Rejected: uploading directly from the browser to a Cloud Storage signed URL (no size limit at all, but it needs custom upload code in the page, and HTTP/2 was enough).
+
+**D46. A clearer website layout.**
+- **Layout.** A header with the three steps; the episode inputs on the left (title and keyword folded into an accordion), results on the right. A row of score cards turns the Scores JSON into the numbers people look at first, and the social pack is shown as text ready to copy, with each X post's length. A Clear button resets the page, and the download link appears only once there is an article. The theme (Gradio Soft, indigo, Inter) and CSS go to `launch()` and, for the HTTP/2 server, `mount_gradio_app()`, since Gradio 6 takes them there.
+- **Sample transcript.** *Try a sample transcript* fills in a short, made-up interview, so a visitor can try the site without an episode. It is filled in by the browser (a `js=` event), so a quick *Create article* click right after it already sends the sample.
+- **Bug found while testing.** Gradio 6 does not render a closed accordion, so its text boxes reach the handler as `None`, not `""`, and `generate()` failed on `keyword.strip()`. `run()` now treats missing text as empty, and a test covers it.
+
+Tested on the Mac (llama.cpp, SFT + DPO) with the sample transcript: a 735-word article, all SEO checks passed, 5 X posts, 2.0 minutes of writing. Also checked that the Kaggle front end starts over HTTP/2 with the new theme.

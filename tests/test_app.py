@@ -72,12 +72,13 @@ def test_site_switches_adapters_by_name_and_stops_at_the_daily_limit():
 
     gen = SwitchingGen()
     models = {"Fine-tuned: SFT + DPO (best SEO)": "/a/dpo", "Fine-tuned: SFT": "/a/sft", gradio_app.BASE_LABEL: None}
-    ui = gradio_app.build_ui(gen, models=models, daily_limit=2)
+    ui = gradio_app.build_ui(gen, models=models, daily_limit=3)
     run = next(f.fn for f in ui.fns.values() if f.name == "run")
     for label in ("Fine-tuned: SFT", "Fine-tuned: SFT + DPO (best SEO)"):
         assert run("Zipline", "", "", None, TRANSCRIPT, "", label)[0].startswith("# Drone")
     assert gen.adapters == ["Fine-tuned: SFT", "Fine-tuned: SFT + DPO (best SEO)"]  # distinct names: vLLM caches by name
-    with pytest.raises(gr.Error, match="limit of 2"):
+    assert run(None, None, None, None, TRANSCRIPT, None, gradio_app.BASE_LABEL)[0].startswith("# Drone")  # unrendered fields
+    with pytest.raises(gr.Error, match="limit of 3"):
         run("Zipline", "", "", None, TRANSCRIPT, "", gradio_app.BASE_LABEL)
 
 
@@ -118,3 +119,19 @@ def test_youtube_links_are_refused_before_a_kaggle_run_starts():
         with pytest.raises(ValueError, match="YouTube blocks downloads"):
             gradio_app.kaggle_generate("", "", None, "", url, "", "sft_dpo", runner=runner)
     assert not gradio_app.BLOCKED_ON_KAGGLE.match("https://notyoutube.com/feed")
+
+
+def test_result_cards_and_social_pack_render_from_the_json():
+    out = gradio_app.generate(FakeGen(), "Zipline", TRANSCRIPT, None, "")
+    cards = gradio_app.stat_cards(out["scores"])
+    assert "SEO checks" in cards and "drone delivery" in cards and "X posts" in cards
+    assert gradio_app.stat_cards("not json") == ""
+    md = gradio_app.social_markdown(json.dumps({"linkedin": "Post", "x_thread": ["one", "two"], "newsletter": "N",
+                                                "pull_quotes": ["Q"]}))
+    assert "### LinkedIn\nPost" in md and "1. one" in md and "2/2" in md and "> Q" in md
+    assert "did not produce" in gradio_app.social_markdown("{}")
+
+
+def test_sample_transcript_parses_into_speaker_turns():
+    utts = gradio_app.text_to_utterances(gradio_app.SAMPLE_TRANSCRIPT)
+    assert len(utts) > 10 and {u["speaker"] for u in utts} == {"Host", "Maya"}

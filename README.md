@@ -89,6 +89,8 @@ Sources and licenses are listed in `data/SOURCES.md`. The test-set IDs are store
 
 `app/gradio_app.py` is a small website: paste a **podcast link** or upload an **audio file** (or paste a transcript), and it returns an SEO article (downloadable as `.md`), the social pack, the SEO checks, and any names or numbers the article uses that are not in the transcript. It runs the same pipeline code that the evaluation scored.
 
+The page has an episode panel (link, audio file or transcript, with a *Try a sample transcript* button), the model picker, and the title and keyword under *Title and keyword (optional)*. Results show as score cards (SEO checks, words, keyword, X posts, unsupported facts, writing time) above tabs for the article, the social pack (readable, with the raw JSON underneath), the scores, the episode notes and the transcript used.
+
 A podcast link can be:
 - a direct audio link (`.mp3`, `.m4a`, …),
 - an RSS feed: the newest episode, or the one whose title contains the text in *Episode in feed*,

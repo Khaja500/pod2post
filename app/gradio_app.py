@@ -21,6 +21,7 @@ transcribed with faster-whisper: configs/asr.yaml's model on a GPU, --asr-model 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -158,6 +159,105 @@ def kaggle_generate(title: str, transcript: str, audio: str | None, keyword: str
     return res
 
 
+SAMPLE_TITLE = "Why cities are planting tiny forests"
+SAMPLE_TRANSCRIPT = """Host: Welcome back to Green Streets. Today I'm talking with Maya, an urban ecologist who plants tiny forests in cities.
+Maya: Thanks for having me. A tiny forest is a dense patch of native trees, about the size of a tennis court.
+Host: Why so dense?
+Maya: We plant three trees per square metre, following the Miyawaki method from Japan. The trees compete for light, so they grow fast.
+Host: How fast are we talking?
+Maya: In our sites in Leeds, the trees grew about one metre a year for the first three years. After three years we stop watering and weeding; the forest looks after itself.
+Host: And what do neighbourhoods get out of it?
+Maya: Shade, cooler streets in summer, and a lot more insects and birds. Our volunteers counted over 500 species of animals and plants at one school site.
+Host: Who does the planting?
+Maya: Mostly local people. A planting day takes about a hundred volunteers and one weekend. Kids love it, and they come back to check on their trees.
+Host: What's the biggest mistake people make?
+Maya: Picking the wrong species. You need trees that are native to your area, and you need to prepare the soil properly before planting.
+Host: If a listener wants to start one, what should they do first?
+Maya: Find a piece of land, talk to the council, and then talk to your neighbours. A tiny forest only works if the community wants it.
+Host: Maya, thank you.
+Maya: Thank you."""
+
+THEME_FONT = "Inter"
+CSS = """
+.gradio-container { max-width: 1240px !important; margin: 0 auto !important; }
+#hero { padding: 28px 30px 22px; border-radius: 18px; color: #fff;
+        background: linear-gradient(120deg, #4338ca 0%, #7c3aed 55%, #db2777 100%); margin-bottom: 6px; }
+#hero h1 { margin: 0 0 6px; font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+#hero p { margin: 0; font-size: 1.02rem; opacity: 0.92; color: #fff; max-width: 760px; }
+#hero .steps { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+#hero .steps span { background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28);
+                    padding: 5px 12px; border-radius: 999px; font-size: 0.86rem; color: #fff; }
+.section-label { font-weight: 700; font-size: 0.95rem; margin: 2px 0 -4px; opacity: 0.85; }
+.note { font-size: 0.86rem; opacity: 0.78; }
+#go { font-size: 1.05rem; font-weight: 700; min-height: 48px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.stat { border: 1px solid var(--border-color-primary); background: var(--block-background-fill);
+        border-radius: 12px; padding: 10px 12px; }
+.stat .v { font-size: 1.35rem; font-weight: 800; line-height: 1.2; }
+.stat .k { font-size: 0.78rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.04em; }
+.stat.wide { grid-column: span 2; } .stat.wide .v { font-size: 1.05rem; padding-top: 4px; }
+.stat.good .v { color: #16a34a; } .stat.warn .v { color: #d97706; } .stat.bad .v { color: #dc2626; }
+.empty { border: 2px dashed var(--border-color-primary); border-radius: 14px; padding: 36px 24px;
+         text-align: center; opacity: 0.75; }
+#article { min-height: 320px; }
+footer { display: none !important; }
+"""
+
+EMPTY_ARTICLE = ('<div class="empty"><b>Your article will appear here.</b><br>Add an episode on the left and press '
+                 '<i>Create article</i>. No episode handy? Press <i>Try a sample transcript</i>.</div>')
+
+
+def stat_cards(scores_json: str) -> str:
+    """The Scores JSON as a row of cards: SEO, length, keyword, social, unsupported facts, time."""
+    import html
+
+    try:
+        s = json.loads(scores_json or "{}")
+    except ValueError:
+        return ""
+    seo, social, src = s.get("seo") or {}, s.get("social") or {}, s.get("source") or {}
+    unsupported = len(s.get("entities_not_in_transcript") or []) + len(s.get("numbers_not_in_transcript") or [])
+    cards = []
+    if "score" in seo:
+        pct = round(100 * seo["score"])
+        cards.append((f"{pct}%", "SEO checks", "good" if pct >= 80 else "warn" if pct >= 60 else "bad"))
+        cards.append((f"{seo.get('words', 0):,}", "words", ""))
+    if s.get("primary_keyword"):
+        cards.append((html.escape(str(s["primary_keyword"])), "keyword", "wide"))
+    if social:
+        cards.append((str(social.get("x_posts", 0)), "X posts", "good" if social.get("x_posts_ok") else "warn"))
+    if "entities_not_in_transcript" in s:
+        cards.append((str(unsupported), "unsupported facts", "good" if unsupported == 0 else "warn"))
+    if src.get("audio_minutes"):
+        cards.append((f"{src['audio_minutes']:.0f} min", "audio", ""))
+    if s.get("generation_seconds") is not None:
+        cards.append((f"{s['generation_seconds'] / 60:.1f} min", "writing time", ""))
+    return '<div class="stats">' + "".join(f'<div class="stat {c}"><div class="v">{v}</div><div class="k">{k}</div>'
+                                            "</div>" for v, k, c in cards) + "</div>"
+
+
+def social_markdown(social_json: str) -> str:
+    """The social pack as text people can copy: LinkedIn, the X thread, the newsletter blurb, pull quotes."""
+    try:
+        s = json.loads(social_json or "{}")
+    except ValueError:
+        return f"```\n{social_json}\n```"
+    if not isinstance(s, dict) or not s:
+        return "*The model did not produce a social pack.*"
+    parts = []
+    if s.get("linkedin"):
+        parts.append(f"### LinkedIn\n{s['linkedin']}")
+    if isinstance(s.get("x_thread"), list) and s["x_thread"]:
+        n = len(s["x_thread"])
+        parts.append("### X thread\n" + "\n".join(f"{i}. {t}  \n   <sub>{i}/{n} · {len(t)} characters</sub>"
+                                                  for i, t in enumerate(s["x_thread"], 1)))
+    if s.get("newsletter"):
+        parts.append(f"### Newsletter blurb\n{s['newsletter']}")
+    if isinstance(s.get("pull_quotes"), list) and s["pull_quotes"]:
+        parts.append("### Pull quotes\n" + "\n\n".join(f"> {q}" for q in s["pull_quotes"]))
+    return "\n\n".join(parts) or f"```json\n{social_json}\n```"
+
+
 def build_ui(gen, transcriber=None, models: dict | None = None, daily_limit: int | None = None):
     """daily_limit caps articles per UTC day, so a public site cannot run up the GPU bill."""
     import datetime
@@ -166,44 +266,58 @@ def build_ui(gen, transcriber=None, models: dict | None = None, daily_limit: int
 
     transcriber = transcriber or Transcriber()
     models = models or {BASE_LABEL: "loaded"}
+    on_kaggle = any(str(v).startswith(KAGGLE) for v in models.values())
     done_today = {}  # {date: articles started}; one entry per day the process has been up
-    with gr.Blocks(title="pod2post") as ui:
-        gr.Markdown("# pod2post\nPaste a podcast link or upload an episode, and get an SEO article and a social pack, "
-                    "with faithfulness and SEO checks. Only use audio you have the right to republish.")
-        with gr.Row():
-            with gr.Column():
-                with gr.Tab("Podcast link"):
-                    url = gr.Textbox(label="Podcast URL", placeholder="https://… (.mp3 link, RSS feed or episode page)")
-                    episode = gr.Textbox(label="Episode in feed (optional)",
-                                         placeholder="part of the episode title; newest episode if empty")
-                with gr.Tab("Audio file"):
-                    audio = gr.File(label="Episode audio (mp3, m4a, wav, …)", file_types=["audio", "video"],
-                                    type="filepath")
-                with gr.Tab("Transcript"):
-                    transcript = gr.Textbox(label="Transcript", lines=14,
-                                            placeholder="Speaker: text, one turn per line (or plain paragraphs)")
-                title = gr.Textbox(label="Episode title (optional; taken from the feed or page if empty)")
-                keyword = gr.Textbox(label="Target keyword (optional; picked from the notes if empty)")
+    with gr.Blocks(title="pod2post: podcast to article") as ui:
+        gr.HTML('<div id="hero"><h1>pod2post</h1><p>Turn a podcast episode into an SEO article and a ready-to-post '
+                "social pack, written by a fine-tuned Qwen3-4B and checked against the transcript.</p>"
+                '<div class="steps"><span>1 · Add an episode</span><span>2 · Pick a model</span>'
+                "<span>3 · Create the article</span></div></div>")
+        with gr.Row(equal_height=False):
+            with gr.Column(scale=5):
+                gr.Markdown("1 · Your episode", elem_classes="section-label")
+                with gr.Tabs() as sources:
+                    with gr.Tab("Podcast link", id="link"):
+                        url = gr.Textbox(label="Podcast URL", placeholder="https://… (.mp3 link, RSS feed or "
+                                                                          "episode page)")
+                        episode = gr.Textbox(label="Episode in feed (optional)",
+                                             placeholder="part of the episode title; newest episode if empty")
+                    with gr.Tab("Audio file", id="file"):
+                        audio = gr.File(label="Episode audio (mp3, m4a, wav, …)", file_types=["audio", "video"],
+                                        type="filepath")
+                    with gr.Tab("Transcript", id="text"):
+                        transcript = gr.Textbox(label="Transcript", lines=12, max_lines=24,
+                                                placeholder="Speaker: text, one turn per line (or plain paragraphs)")
+                        sample = gr.Button("Try a sample transcript", size="sm", variant="secondary")
+                gr.Markdown("2 · Model and options", elem_classes="section-label")
                 model = gr.Dropdown(list(models), value=next(iter(models)), label="Model",
                                     visible=len(models) > 1)
-                go = gr.Button("Create article", variant="primary")
-                gr.Markdown("If more than one input is filled in, the link is used first, then the file, "
-                            "then the transcript."
-                            + (" A *Kaggle GPU* article takes about 12-15 minutes, half of it Kaggle starting up; "
-                               "one article is written at a time." if any(str(v).startswith(KAGGLE)
-                                                                          for v in models.values()) else ""))
-            with gr.Column():
-                with gr.Tab("Article"):
-                    article = gr.Markdown()
-                    download = gr.File(label="Download article (.md)")
-                with gr.Tab("Social pack"):
-                    social = gr.Code(language="json")
-                with gr.Tab("Scores"):
-                    scores = gr.Code(language="json")
-                with gr.Tab("Episode notes"):
-                    notes = gr.Markdown()
-                with gr.Tab("Transcript used"):
-                    used = gr.Textbox(lines=16, show_label=False)
+                with gr.Accordion("Title and keyword (optional)", open=False):
+                    title = gr.Textbox(label="Episode title", placeholder="taken from the feed or page if empty")
+                    keyword = gr.Textbox(label="Target keyword", placeholder="picked from the notes if empty")
+                with gr.Row():
+                    go = gr.Button("Create article", variant="primary", elem_id="go", scale=3)
+                    clear = gr.Button("Clear", variant="secondary", scale=1)
+                gr.Markdown("If more than one input is filled in, the link is used first, then the file, then the "
+                            "transcript. Only use audio you have the right to republish."
+                            + (" A *Kaggle GPU* article takes about 12–15 minutes, half of it Kaggle starting up; "
+                               "one article is written at a time." if on_kaggle else ""), elem_classes="note")
+            with gr.Column(scale=7):
+                stats = gr.HTML()
+                with gr.Tabs():
+                    with gr.Tab("Article"):
+                        article = gr.Markdown(EMPTY_ARTICLE, elem_id="article")
+                        download = gr.File(label="Download article (.md)", visible=False)
+                    with gr.Tab("Social pack"):
+                        social_view = gr.Markdown("*Appears with the article.*")
+                        with gr.Accordion("JSON", open=False):
+                            social = gr.Code(language="json", show_label=False)
+                    with gr.Tab("Scores"):
+                        scores = gr.Code(language="json", show_label=False)
+                    with gr.Tab("Episode notes"):
+                        notes = gr.Markdown()
+                    with gr.Tab("Transcript used"):
+                        used = gr.Textbox(lines=16, show_label=False)
 
         def run(title_, url_, episode_, audio_, transcript_, keyword_, model_, progress=gr.Progress()):
             today = datetime.datetime.now(datetime.timezone.utc).date()
@@ -211,6 +325,9 @@ def build_ui(gen, transcriber=None, models: dict | None = None, daily_limit: int
                 raise gr.Error(f"This site's limit of {daily_limit} articles a day has been reached. "
                                "Please try again tomorrow (UTC).")
             done_today.update({today: done_today.get(today, 0) + 1})  # failed runs count too: they used the GPU
+            # fields in a closed accordion are never rendered, so Gradio sends None for them, not ""
+            title_, url_, episode_, transcript_, keyword_ = (x or "" for x in (title_, url_, episode_, transcript_,
+                                                                                keyword_))
             choice = models.get(model_)
             try:
                 if isinstance(choice, str) and choice.startswith(KAGGLE):
@@ -225,12 +342,27 @@ def build_ui(gen, transcriber=None, models: dict | None = None, daily_limit: int
                 raise gr.Error(str(e)) from None
             except Exception as e:  # network errors, undecodable audio, yt-dlp failures
                 raise gr.Error(f"{type(e).__name__}: {e}") from None
-            return out["article"], out["file"], out["social"], out["scores"], out["notes"], out["transcript"], \
-                out["title"]
+            return out["article"], gr.File(out["file"], visible=bool(out["file"])), out["social"], out["scores"], \
+                out["notes"], out["transcript"], out["title"], stat_cards(out["scores"]), \
+                social_markdown(out["social"])
 
         go.click(run, [title, url, episode, audio, transcript, keyword, model],
-                 [article, download, social, scores, notes, used, title])
+                 [article, download, social, scores, notes, used, title, stats, social_view])
+        # filled in the browser, so a quick "Create article" click right after already sends the sample
+        sample.click(None, None, [transcript, title, url],
+                     js=f"() => [{json.dumps(SAMPLE_TRANSCRIPT)}, {json.dumps(SAMPLE_TITLE)}, '']")
+        clear.click(lambda: ("", "", None, "", "", "", EMPTY_ARTICLE, gr.File(None, visible=False), "", "",
+                             "*Appears with the article.*", "", "", gr.Tabs(selected="link")), None,
+                    [url, episode, audio, transcript, title, keyword, article, download, stats, scores, social_view,
+                     social, used, sources])
     return ui
+
+
+def theme():
+    import gradio as gr
+
+    return gr.themes.Soft(primary_hue="indigo", secondary_hue="violet", neutral_hue="slate",
+                          font=[gr.themes.GoogleFont(THEME_FONT), "ui-sans-serif", "system-ui", "sans-serif"])
 
 
 def serve_http2(ui, port: int, max_file_mb: int) -> None:
@@ -244,7 +376,8 @@ def serve_http2(ui, port: int, max_file_mb: int) -> None:
     from hypercorn.asyncio import serve
     from hypercorn.config import Config
 
-    app = gr.mount_gradio_app(FastAPI(), ui, path="/", max_file_size=f"{max_file_mb}mb")
+    app = gr.mount_gradio_app(FastAPI(), ui, path="/", max_file_size=f"{max_file_mb}mb", theme=theme(),
+                              css=CSS)
     config = Config()
     config.bind = [f"0.0.0.0:{port}"]
     print(f"[pod2post] serving HTTP/2 (h2c) on port {port}", flush=True)
@@ -280,7 +413,7 @@ def main() -> None:
     if args.http2:
         serve_http2(ui, int(os.environ.get("PORT", 8080)), args.max_file_mb)
     else:
-        ui.launch(share=args.share, max_file_size=f"{args.max_file_mb}mb")
+        ui.launch(share=args.share, max_file_size=f"{args.max_file_mb}mb", theme=theme(), css=CSS)
 
 
 if __name__ == "__main__":
